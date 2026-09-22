@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sistema de Emergencias{% endblock %}</title>
+    
+    <!-- Tailwind CSS (Librería libre vía CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="flex flex-col min-h-full bg-slate-50 text-slate-800">
+
+    <!-- NAVBAR -->
+    <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                
+                <!-- IZQUIERDA: Logo -->
+                <div class="flex items-center space-x-3">
+                    <a href="/" class="flex items-center space-x-3">
+                        <!-- <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="h-10 w-auto object-contain"> -->
+                        <span class="font-bold text-lg text-slate-900 hidden sm:inline">Gestión de Emergencias</span>
+                    </a>
+                </div>
+
+                <!-- DERECHA: Enlaces y Botones -->
+                <nav class="flex items-center space-x-4">
+                    {% if current_user.is_authenticated %}
+                        <!-- Información del Usuario y Rol -->
+                        <div class="hidden md:flex flex-col text-right">
+                            <span class="text-sm font-semibold text-slate-900">{{ current_user.nombre }}</span>
+                            <span class="text-xs text-indigo-600 font-medium">
+                                {{ current_user.rol.value if current_user.rol.value is defined else current_user.rol }}
+                            </span>
+                        </div>
+
+                        <a href="/" class="text-slate-600 hover:text-slate-900 text-sm font-medium px-3 py-2 rounded-md hover:bg-slate-100 transition">
+                            Panel
+                        </a>
+
+                        <a href="{{ url_for('auth.logout') if 'auth.logout' in config.get('ENDPOINTS', {}) else '/logout' }}" 
+                           class="bg-red-50 text-red-600 hover:bg-red-100 font-medium text-sm px-4 py-2 rounded-lg transition border border-red-200">
+                            Cerrar Sesión
+                        </a>
+                    {% endif %}
+                </nav>
+
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}
+        <!-- Aquí se inyecta el contenido de las subvistas -->
+        {% endblock %}
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-white border-t border-slate-200 py-6 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center text-sm text-slate-500 gap-4">
+            <p>© {{ 2026 }} Sistema de Emergencias Municipales & ONGs.</p>
+        </div>
+    </footer>
+
+</body>
+</html>

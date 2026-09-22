@@ -32,4 +32,6 @@ COPY . .
 EXPOSE 5000
 
 # Comando para ejecutar Flask con auto-reload activo
-CMD ["poetry", "run", "flask", "run", "--host=0.0.0.0", "--port=5000", "--reload", "--debug"]
+RUN chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]

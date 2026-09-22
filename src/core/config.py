@@ -7,9 +7,11 @@ load_dotenv(dotenv_path='.env')
 class Config(object):
     TESTING = False
     SECRET_KEY= environ.get('SECRET_KEY_PASS','my_precious') # "my_precious"
-    SESSION_TYPE= "filesystem"
-    SESSION_PERMANENT= True
     PERMANENT_SESSION_LIFETIME = timedelta(hours=1)
+    # Asegurar que las cookies funcionen en desarrollo HTTP (sin SSL)
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = False  # Setear en True solo en producción con HTTPS
 
 class ProductionConfig(Config):
     SQLALCHEMY_DATABASE_URI = environ.get("DATABASE_URL")

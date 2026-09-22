@@ -1,0 +1,97 @@
+{% extends "layout.html" %}
+
+{% block title %}Inicio - Sistema de Emergencias Municipales{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Tarjeta de Bienvenida Principal -->
+    <div class="bg-indigo-700 text-white rounded-2xl p-6 sm:p-8 shadow-sm relative overflow-hidden">
+        <div class="relative z-10 max-w-3xl">
+            <span class="inline-block bg-indigo-600 text-indigo-100 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider mb-3">
+                {{ current_user.rol.value if current_user.rol.value is defined else current_user.rol }}
+            </span>
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight">
+                ¡Hola de nuevo, {{ current_user.nombre }}!
+            </h1>
+            <p class="mt-2 text-indigo-100 text-base sm:text-lg">
+                Bienvenido/a al Sistema de Gestión de Emergencias Municipales y Coordinación de Ayuda Humanitaria.
+            </p>
+        </div>
+        <!-- Decoración de fondo -->
+        <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-600 rounded-full opacity-50 blur-2xl pointer-events-none"></div>
+    </div>
+
+    <!-- Módulos de Acción Rápida (Condicionados por RolEnum) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        {% if current_user.rol.value == 'Operador Municipal' or current_user.rol == 'Operador Municipal' %}
+            <!-- Módulo Operador -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+                <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center font-bold text-xl mb-4">
+                    🚨
+                </div>
+                <h3 class="text-lg font-bold text-slate-900 mb-1">Registrar Emergencia</h3>
+                <p class="text-sm text-slate-600 mb-4">Carga nuevos incidentes o eventos de emergencia reportados en el municipio.</p>
+                <a href="#" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                    Ir a Incidentes &rarr;
+                </a>
+            </div>
+        {% endif %}
+
+        {% if current_user.rol.value == 'Centro Coordinador' or current_user.rol == 'Centro Coordinador' %}
+            <!-- Módulo Centro Coordinador -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+                <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-bold text-xl mb-4">
+                    📦
+                </div>
+                <h3 class="text-lg font-bold text-slate-900 mb-1">Publicar Lotes y Donaciones</h3>
+                <p class="text-sm text-slate-600 mb-4">Gestioná y consolidá requerimientos para coordinar con las ONGs.</p>
+                <a href="#" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                    Gestionar Lotes &rarr;
+                </a>
+            </div>
+        {% endif %}
+
+        {% if current_user.rol.value == 'ONG' or current_user.rol == 'ONG' %}
+            <!-- Módulo ONG -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+                <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center font-bold text-xl mb-4">
+                    🤝
+                </div>
+                <h3 class="text-lg font-bold text-slate-900 mb-1">Ofrecer Ayuda</h3>
+                <p class="text-sm text-slate-600 mb-4">Revisá las solicitudes de insumos vigentes y postulate para donar o asistir.</p>
+                <a href="#" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                    Ver Solicitudes &rarr;
+                </a>
+            </div>
+        {% endif %}
+
+        {% if current_user.rol.value == 'Auditor' or current_user.rol == 'Auditor' %}
+            <!-- Módulo Auditor -->
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+                <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center font-bold text-xl mb-4">
+                    📊
+                </div>
+                <h3 class="text-lg font-bold text-slate-900 mb-1">Reportes de Auditoría</h3>
+                <p class="text-sm text-slate-600 mb-4">Consultá los registros de trazabilidad y logs de operaciones del sistema.</p>
+                <a href="#" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                    Ver Auditoría &rarr;
+                </a>
+            </div>
+        {% endif %}
+
+        <!-- Tarjeta común a todos los usuarios -->
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+            <div class="w-12 h-12 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center font-bold text-xl mb-4">
+                👤
+            </div>
+            <h3 class="text-lg font-bold text-slate-900 mb-1">Mi Perfil</h3>
+            <p class="text-sm text-slate-600 mb-4">Verificá tus datos de usuario registrados y estado de la cuenta.</p>
+            <span class="text-xs text-slate-400 block">{{ current_user.email }}</span>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}
