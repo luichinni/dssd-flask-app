@@ -8,6 +8,7 @@ from src.core.config import config
 from src.core.bcrypt_and_session import bcrypt
 from src.web.handlers.error import register_error_handlers
 from src.web.controllers.auth import auth_bp
+from src.web.controllers.users import users_bp
 from src.core.seeds import seed
 from src.web.auth_manager import auth_manager
 
@@ -30,10 +31,16 @@ def create_app(env="development", static_folder="./static"):
     register_error_handlers(app)
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(users_bp)
 
     @app.cli.command(name="reset-db")
     def reset_db():
         database.reset()
+        seed(app)
+
+    @app.cli.command(name="seed-db")
+    def seed_db():
+        """Carga los datos iniciales sin eliminar los existentes."""
         seed(app)
 
     return app

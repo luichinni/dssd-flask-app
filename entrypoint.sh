@@ -10,8 +10,8 @@ echo "✅ PostgreSQL conectado."
 echo "🚀 Ejecutando migraciones..."
 poetry run flask db upgrade
 
-echo "🌱 Inicializando datos de prueba (Reset & Seed)..."
-poetry run flask reset-db
+echo "🌱 Inicializando datos de prueba (solo agrega los faltantes)..."
+poetry run flask seed-db
 
 echo "🔥 Iniciando Flask..."
 exec poetry run flask run --host=0.0.0.0 --port=5000 --reload --debug
