@@ -1,3 +1,6 @@
 from .user import Usuario
+from .inventario import InventarioONG
+from .notificacion import Notificacion
+from .actividad import ActividadONG
 
-__all__ = ["Usuario"]
+__all__ = ["Usuario", "InventarioONG", "Notificacion", "ActividadONG"]

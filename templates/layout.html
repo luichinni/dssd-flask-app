@@ -37,12 +37,32 @@
                         <a href="/" class="text-slate-600 hover:text-slate-900 text-sm font-medium px-3 py-2 rounded-md hover:bg-slate-100 transition">
                             Panel
                         </a>
+
+                        {% set rol_actual = current_user.rol.value if current_user.rol.value is defined else current_user.rol %}
+                        {% if rol_actual == 'ONG' %}
+                            <a href="{{ url_for('ong.inventario_index') }}" class="text-slate-600 hover:text-slate-900 text-sm font-medium px-3 py-2 rounded-md hover:bg-slate-100 transition">
+                                Inventario
+                            </a>
+
+                            <a href="{{ url_for('ong.notificaciones_index') }}" class="relative text-slate-600 hover:text-slate-900 text-sm font-medium px-3 py-2 rounded-md hover:bg-slate-100 transition flex items-center gap-1.5">
+                                Notificaciones
+                                {% if notificaciones_pendientes_count and notificaciones_pendientes_count > 0 %}
+                                    <span class="inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-indigo-600 rounded-full">
+                                        {{ notificaciones_pendientes_count }}
+                                    </span>
+                                {% endif %}
+                            </a>
+
+                            <a href="{{ url_for('ong.actividades_index') }}" class="text-slate-600 hover:text-slate-900 text-sm font-medium px-3 py-2 rounded-md hover:bg-slate-100 transition">
+                                Actividades
+                            </a>
+                        {% endif %}
                         
                         <a href="{{ url_for('users.index') }}" class="text-slate-600 hover:text-slate-900 text-sm font-medium px-3 py-2 rounded-md hover:bg-slate-100 transition">
                             Usuarios
                         </a>
 
-                        <a href="{{ url_for('auth.logout') if 'auth.logout' in config.get('ENDPOINTS', {}) else '/logout' }}" 
+                        <a href="{{ url_for('auth.logout') }}" 
                            class="bg-red-50 text-red-600 hover:bg-red-100 font-medium text-sm px-4 py-2 rounded-lg transition border border-red-200">
                             Cerrar Sesión
                         </a>
@@ -55,6 +75,20 @@
 
     <!-- CONTENIDO PRINCIPAL -->
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- MENSAJES FLASH -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-6 space-y-2">
+                    {% for category, message in messages %}
+                        {% set bg_color = 'bg-emerald-50 text-emerald-800 border-emerald-200' if category == 'success' else ('bg-red-50 text-red-800 border-red-200' if category == 'error' else 'bg-blue-50 text-blue-800 border-blue-200') %}
+                        <div class="flex items-center justify-between p-4 rounded-xl border {{ bg_color }} text-sm font-medium shadow-sm transition">
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
         {% block content %}
         <!-- Aquí se inyecta el contenido de las subvistas -->
         {% endblock %}
