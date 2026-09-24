@@ -1,0 +1,135 @@
+{% extends "layout.html" %}
+
+{% block title %}Centro de Notificaciones - RescueSync{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+    <!-- ENCABEZADO -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2.5">
+                <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Centro de Notificaciones</h1>
+                {% if total_no_leidas > 0 %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        {{ total_no_leidas }} nuevas
+                    </span>
+                {% endif %}
+            </div>
+            <p class="text-sm text-slate-600 mt-1">Avisos formales de adjudicación de lotes, convocatorias y actualizaciones operativas.</p>
+        </div>
+
+        {% if total_no_leidas > 0 %}
+        <div>
+            <form action="{{ url_for('ong.notificaciones_marcar_todas') }}" method="POST">
+                <button type="submit" class="inline-flex items-center px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-sm transition gap-1.5">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Marcar todas como leídas
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- PESTAÑAS DE FILTRO -->
+    <div class="flex border-b border-slate-200 space-x-6 text-sm font-medium">
+        <a href="{{ url_for('ong.notificaciones_index') }}" 
+           class="pb-3 border-b-2 {{ 'border-indigo-600 text-indigo-600 font-semibold' if filtro_actual == 'todas' else 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300' }} transition">
+            Todas las notificaciones
+        </a>
+        <a href="{{ url_for('ong.notificaciones_index', filtro='no_leidas') }}" 
+           class="pb-3 border-b-2 {{ 'border-indigo-600 text-indigo-600 font-semibold' if filtro_actual == 'no_leidas' else 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300' }} transition">
+            No leídas
+        </a>
+    </div>
+
+    <!-- LISTADO DE NOTIFICACIONES -->
+    {% if notificaciones %}
+    <div class="space-y-4">
+        {% for notif in notificaciones %}
+        {% set tipo_str = notif.tipo.value if notif.tipo.value is defined else notif.tipo %}
+        <div class="bg-white rounded-2xl border {{ 'border-indigo-200 shadow-sm' if not notif.leida else 'border-slate-200' }} p-6 transition hover:shadow-md">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-start gap-4">
+                    <!-- Icono según tipo -->
+                    {% if tipo_str == 'Adjudicación de Lote' %}
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    {% else %}
+                    <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    {% endif %}
+
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900">{{ notif.titulo }}</h3>
+                            
+                            {% if tipo_str == 'Adjudicación de Lote' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Adjudicado
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                    Informativo
+                                </span>
+                            {% endif %}
+
+                            {% if not notif.leida %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    Nueva
+                                </span>
+                            {% endif %}
+                        </div>
+
+                        <p class="text-xs text-slate-500 mt-1">
+                            {{ notif.created_at.strftime('%d/%m/%Y a las %H:%M') }}
+                        </p>
+
+                        <div class="text-sm text-slate-700 mt-3 whitespace-pre-line leading-relaxed">
+                            {{ notif.mensaje }}
+                        </div>
+
+                        {% if notif.referencia_id %}
+                        <div class="mt-3">
+                            <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-1 rounded">Ref ID Lote / Operación: #{{ notif.referencia_id }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Botón individual de leída -->
+                {% if not notif.leida %}
+                <form action="{{ url_for('ong.notificacion_marcar_leida', id=notif.id) }}" method="POST">
+                    <button type="submit" title="Marcar como leída" class="text-xs text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-slate-50 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
+        <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+        </div>
+        <h3 class="text-base font-medium text-slate-900">No hay notificaciones {{ 'no leídas' if filtro_actual == 'no_leidas' else 'recibidas' }}</h3>
+        <p class="text-sm text-slate-500 mt-1 max-w-sm mx-auto">Cuando el municipio adjudique una oferta presentada por tu ONG, recibirás aquí el aviso formal con los datos del lote.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

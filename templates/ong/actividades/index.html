@@ -1,0 +1,150 @@
+{% extends "layout.html" %}
+
+{% block title %}Actividades Operativas - RescueSync{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- ENCABEZADO -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Actividades y Despliegues Operativos</h1>
+            <p class="text-sm text-slate-600 mt-1">Supervisa las misiones adjudicadas y registra formalmente el informe de finalización para la liberación de recursos.</p>
+        </div>
+    </div>
+
+    <!-- TARJETAS DE ESTADO -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Actividades en Ejecución</p>
+                <h3 class="text-2xl font-bold text-amber-600 mt-1">{{ en_curso_cant }}</h3>
+            </div>
+            <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Actividades Finalizadas</p>
+                <h3 class="text-2xl font-bold text-emerald-600 mt-1">{{ finalizadas_cant }}</h3>
+            </div>
+            <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- PESTAÑAS DE FILTRO -->
+    <div class="flex border-b border-slate-200 space-x-6 text-sm font-medium">
+        <a href="{{ url_for('ong.actividades_index') }}" 
+           class="pb-3 border-b-2 {{ 'border-indigo-600 text-indigo-600 font-semibold' if filtro_actual == 'todas' else 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300' }} transition">
+            Todas ({{ actividades|length }})
+        </a>
+        <a href="{{ url_for('ong.actividades_index', estado='en_ejecucion') }}" 
+           class="pb-3 border-b-2 {{ 'border-indigo-600 text-indigo-600 font-semibold' if filtro_actual == 'en_ejecucion' else 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300' }} transition">
+            En Ejecución
+        </a>
+        <a href="{{ url_for('ong.actividades_index', estado='finalizada') }}" 
+           class="pb-3 border-b-2 {{ 'border-indigo-600 text-indigo-600 font-semibold' if filtro_actual == 'finalizada' else 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300' }} transition">
+            Finalizadas
+        </a>
+    </div>
+
+    <!-- LISTADO DE ACTIVIDADES -->
+    {% if actividades %}
+    <div class="space-y-4">
+        {% for act in actividades %}
+        {% set estado_str = act.estado.value if act.estado.value is defined else act.estado %}
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                
+                <div class="space-y-2 flex-grow">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <h3 class="text-lg font-bold text-slate-900">{{ act.titulo }}</h3>
+                        
+                        {% if estado_str == 'En Ejecución' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                En Ejecución
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                Finalizada
+                            </span>
+                        {% endif %}
+
+                        {% if act.lote_referencia %}
+                            <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                                Lote: {{ act.lote_referencia }}
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    {% if act.descripcion %}
+                    <p class="text-sm text-slate-600">{{ act.descripcion }}</p>
+                    {% endif %}
+
+                    {% if act.recursos_utilizados %}
+                    <div class="text-xs text-slate-500">
+                        <strong class="text-slate-700">Recursos desplegados:</strong> {{ act.recursos_utilizados }}
+                    </div>
+                    {% endif %}
+
+                    <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
+                        <span><strong>Inicio:</strong> {{ act.fecha_inicio.strftime('%d/%m/%Y %H:%M') }}</span>
+                        {% if act.fecha_finalizacion %}
+                            <span><strong>Cierre:</strong> {{ act.fecha_finalizacion.strftime('%d/%m/%Y %H:%M') }}</span>
+                        {% endif %}
+                    </div>
+
+                    {% if act.informe_cierre %}
+                    <div class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700">
+                        <div class="font-semibold text-slate-900 mb-1">Informe formal de cierre:</div>
+                        <div class="whitespace-pre-line">{{ act.informe_cierre }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- ACCIONES -->
+                <div class="flex-shrink-0 pt-2 lg:pt-0">
+                    {% if estado_str == 'En Ejecución' %}
+                        <a href="{{ url_for('ong.actividad_finalizar', id=act.id) }}" 
+                           class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Marcar como Finalizada
+                        </a>
+                    {% else %}
+                        <div class="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200 gap-1.5">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Labores Concluidas
+                        </div>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
+        <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+        </div>
+        <h3 class="text-base font-medium text-slate-900">No hay actividades registradas en esta vista</h3>
+        <p class="text-sm text-slate-500 mt-1 max-w-sm mx-auto">Las actividades operativas surgen al adjudicarse lotes para la intervención de tu ONG.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

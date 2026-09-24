@@ -7,10 +7,13 @@ from src.core import database
 from src.core.config import config
 from src.core.bcrypt_and_session import bcrypt
 from src.web.handlers.error import register_error_handlers
-from src.web.controllers.auth import auth_bp
-from src.web.controllers.users import users_bp
+from src.core import models
 from src.core.seeds import seed
 from src.web.auth_manager import auth_manager
+from src.web.controllers.auth import auth_bp
+from src.web.controllers.users import users_bp
+from src.web.controllers.ong import ong_bp
+from flask_login import current_user
 
 load_dotenv()
 
@@ -32,6 +35,17 @@ def create_app(env="development", static_folder="./static"):
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
+    app.register_blueprint(ong_bp)
+
+    @app.context_processor
+    def inject_global_data():
+        if current_user.is_authenticated and hasattr(current_user, 'rol'):
+            from src.core.enums import RolEnum
+            from src.core.services.notificaciones import contar_no_leidas
+            rol_val = current_user.rol.value if hasattr(current_user.rol, 'value') else current_user.rol
+            if rol_val == RolEnum.ONG.value:
+                return {'notificaciones_pendientes_count': contar_no_leidas(current_user.id)}
+        return {'notificaciones_pendientes_count': 0}
 
     @app.cli.command(name="reset-db")
     def reset_db():

@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+
+{% block title %}Finalizar Actividad Operativa - RescueSync{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Cierre y Finalización de Actividad</h1>
+            <p class="text-sm text-slate-600 mt-1">Registra formalmente la conclusión de las tareas de campo para notificar al sistema y liberar los recursos asignados.</p>
+        </div>
+        <a href="{{ url_for('ong.actividades_index') }}" class="text-sm font-medium text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition">
+            Volver
+        </a>
+    </div>
+
+    <!-- TARJETA DE RESUMEN DE LA ACTIVIDAD -->
+    <div class="bg-indigo-50/60 rounded-2xl border border-indigo-100 p-6 space-y-2">
+        <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-slate-900">{{ actividad.titulo }}</h2>
+            {% if actividad.lote_referencia %}
+                <span class="text-xs font-mono bg-white text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded">
+                    Lote: {{ actividad.lote_referencia }}
+                </span>
+            {% endif %}
+        </div>
+        {% if actividad.descripcion %}
+            <p class="text-sm text-slate-600">{{ actividad.descripcion }}</p>
+        {% endif %}
+        <p class="text-xs text-slate-500">
+            <strong>Fecha de inicio de despliegue:</strong> {{ actividad.fecha_inicio.strftime('%d/%m/%Y a las %H:%M') }}
+        </p>
+    </div>
+
+    <!-- FORMULARIO DE CIERRE -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+        <form method="POST" class="space-y-6">
+
+            <!-- Recursos Utilizados o Retornados -->
+            <div>
+                <label for="recursos_utilizados" class="block text-sm font-semibold text-slate-800 mb-1.5">
+                    Recursos y Personal Efectivamente Desplegados
+                </label>
+                <input type="text" id="recursos_utilizados" name="recursos_utilizados" 
+                       value="{{ actividad.recursos_utilizados or '' }}" 
+                       placeholder="Ej: 5 paramédicos, 2 ambulancias, 500 raciones entregadas"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm">
+                <p class="text-xs text-slate-500 mt-1">Detalle del personal o consumibles que retornan a la disponibilidad de la organización.</p>
+            </div>
+
+            <!-- Informe de Cierre -->
+            <div>
+                <label for="informe_cierre" class="block text-sm font-semibold text-slate-800 mb-1.5">
+                    Informe de Cierre y Conclusiones Operativas *
+                </label>
+                <textarea id="informe_cierre" name="informe_cierre" rows="5" required
+                          placeholder="Describe el resultado de la misión, contingencias encontradas y estado general de la zona atendida..."
+                          class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm"></textarea>
+                <p class="text-xs text-slate-500 mt-1">Este informe quedará registrado en el historial de la emergencia para auditorías y métricas.</p>
+            </div>
+
+            <!-- Advertencia / Info -->
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-3">
+                <svg class="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Al confirmar, la actividad pasará al estado <span class="font-semibold text-slate-800">Finalizada</span> de forma irreversible, notificando la conclusión al Centro Coordinador y dejando el estado listo para el desbloqueo centralizado de los recursos.
+                </p>
+            </div>
+
+            <!-- Botones -->
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <a href="{{ url_for('ong.actividades_index') }}" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition">
+                    Cancelar
+                </a>
+                <button type="submit" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Confirmar Cierre de Actividad
+                </button>
+            </div>
+
+        </form>
+    </div>
+
+</div>
+{% endblock %}
