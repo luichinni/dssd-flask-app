@@ -14,6 +14,8 @@ class VersionOferta(db.Model):
 
     oferta = db.relationship('Oferta', back_populates='versiones')
 
+    detalles = db.relationship('DetalleVersionOferta', back_populates='version', cascade='all, delete-orphan')
+
     usuario = db.relationship('Usuario', foreign_keys=[usuario_modificacion])
 
     __table_args__ = (
