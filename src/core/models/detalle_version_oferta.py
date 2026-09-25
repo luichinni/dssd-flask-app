@@ -11,7 +11,7 @@ class DetalleVersionOferta(db.Model):
     cantidad_adjudicada = db.Column(db.Integer, nullable=True)
 
     version = db.relationship(
-        'OfertaVersion',
+        'VersionOferta',
         back_populates='detalles'
     )
 
