@@ -8,7 +8,19 @@
     <label for="nombre">Nombre de la Oferta:</label>
     <input type="text" id="nombre" name="nombre" required>
 
-    
+    <label for="descripcion">Descripción:</label>
+    <textarea id="descripcion" name="descripcion" required></textarea>
+
+    <label for="conjunta">¿Es una oferta conjunta?:</label>
+    <select id="conjunta" name="conjunta" required>
+        <option value="true">Sí</option>
+        <option value="false">No</option>
+    </select>
+
+    <label for="detalle">Detalle:</label>
+    <textarea id="detalle" name="detalle" required></textarea>
+
+    <button type="submit">Crear Oferta</button> 
 </form>
 
 {% endblock %}
