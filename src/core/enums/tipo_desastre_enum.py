@@ -6,6 +6,8 @@ class TipoDesastreEnum(str, Enum):
     meteorologico = "Meteorológico"
     hidrologico = "Hidrológico"
     biologico = "Biológico"
-    #este tipo de desastre es causado por el hombre
-    antropico = "Antropogénico"
+    incendio_forestal = "Incendio Forestal"
+
+    import enum
+
 

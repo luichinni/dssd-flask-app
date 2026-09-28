@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
-from src.core.models import Usuario, InventarioONG, Notificacion, ActividadONG
-from src.core.enums import RolEnum, TipoRecursoEnum, TipoNotificacionEnum, EstadoActividadEnum
+from src.core.models import Usuario, InventarioONG, Notificacion, ActividadONG, Emergencia
+from src.core.enums import RolEnum, TipoRecursoEnum, TipoNotificacionEnum, EstadoActividadEnum, TipoDesastreEnum
 from src.core.database import db
 
 def seed(app):
@@ -9,6 +9,7 @@ def seed(app):
         print("🌱 Iniciando carga de datos iniciales (Seeding)...")
         seed_users()
         seed_ong_data()
+        seed_emergencies_data()
         print("🌱 Finalización de la carga de datos iniciales (Seeding)!")
 
 def seed_users():
@@ -197,5 +198,67 @@ def seed_ong_data():
             )
             db.session.add(act)
             print(f"  [+] Actividad creada: {a_data['titulo']} ({a_data['estado'].value})")
+
+    db.session.commit()
+
+def seed_emergencies_data():
+    print('🌱 Seedeando datos de Emergencias...')
+    #el operador municipal actua como el reportante de las emergencias
+    operador = Usuario.query.filter_by(email='operador@municipio.gob.ar').first()
+
+    if not operador:
+        print('  [!] Usuario Operador Municipal no encontrado. Saltando seeding de Emergencias.')
+        return
+
+    emergencias_base = [
+        {
+            'tipo_desastre': TipoDesastreEnum.geologico,
+            'nivel_gravedad': 3,
+            'zona_afectada': 'Barrio Ribereño, Quilmes',
+            'descripcion': 'Terremoto de magnitud 5.2 con daños estructurales leves en viviendas y cortes de energía eléctrica.',
+            'reportante_id': operador.id
+        },
+        {
+            'tipo_desastre': TipoDesastreEnum.meteorologico,
+            'nivel_gravedad': 4,
+            'zona_afectada': 'Zona Forestal, La Plata',
+            'descripcion': 'Tormenta severa con ráfagas de viento de hasta 120 km/h, caída de árboles y voladura de techos en varias viviendas.',
+            'reportante_id': operador.id
+        },
+        {
+            'tipo_desastre': TipoDesastreEnum.hidrologico,
+            'nivel_gravedad': 5,
+            'zona_afectada': 'Centro Urbano, San Juan',
+            'descripcion': 'Inundación por lluvias intensas que ha provocado el desbordamiento de ríos y la afectación de zonas residenciales.',
+            'reportante_id': operador.id
+        },
+        {
+            'tipo_desastre': TipoDesastreEnum.biologico,
+            'nivel_gravedad': 3,
+            'zona_afectada': 'Zona Rural, Rosario',
+            'descripcion': 'Brote de enfermedad zoonótica que ha afectado a ganado y ha generado alerta sanitaria en la región.',
+            'reportante_id': operador.id
+        },
+        {
+            'tipo_desastre': TipoDesastreEnum.incendio_forestal,
+            'nivel_gravedad': 4,
+            'zona_afectada': 'Parque Nacional, Mendoza',
+            'descripcion': 'Incendio forestal de gran magnitud con evacuación de campamentos y riesgo para fauna local.',
+            'reportante_id': operador.id
+        },
+    ]
+
+    for e_data in emergencias_base:
+        existente = Emergencia.query.filter_by(zona_afectada=e_data['zona_afectada'], tipo_desastre=e_data['tipo_desastre']).first()
+        if not existente:
+            emergencia = Emergencia(
+                tipo_desastre=e_data['tipo_desastre'],
+                nivel_gravedad=e_data['nivel_gravedad'],
+                zona_afectada=e_data['zona_afectada'],
+                descripcion=e_data['descripcion'],
+                reportante_id=e_data['reportante_id']
+            )
+            db.session.add(emergencia)
+            print(f"  [+] Emergencia creada: {e_data['zona_afectada']} ({e_data['tipo_desastre'].value})")
 
     db.session.commit()
