@@ -1,4 +1,66 @@
 {%extends "layout.html"%}
 {% block title %}Listado de Ofertas - Sistema de Emergencias Municipales{% endblock %}
 
+<div>
+    <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900">Listado de Ofertas</h1>
+    <p class="mt-2 text-slate-600"> Aquí puede ver todas las ofertas creadas por usted o en las que participa. </p>
+
+    <table class="w-full">
+        <thead>
+            <tr>
+                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">ID Oferta</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Nombre Emergencia</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Versión</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Estado</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">¿Es conjunta?</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Recursos</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Otros</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for oferta in ofertas %}
+            <tr>
+                <td>{{ oferta.id }}</td>
+                <td>{{ oferta.nombre_emergencia }}</td>
+                <td>{{ oferta.version }}</td>
+                <td>{{ oferta.estado }}</td>
+                <td>
+                    {% if oferta.es_conjunta %}
+                        Sí
+                    {% else %}
+                        No
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="flex flex-wrap gap-2">
+
+                        {% for recurso in oferta.recursos %}
+
+                            <span class="px-2 py-1 rounded-full bg-slate-100 text-sm">
+                                {{ recurso.nombre }}
+                            </span>
+
+                        {% endfor %}
+
+                    </div>
+                </td>
+                <td>
+                    {% if oferta.estado == "Aceptada" or oferta.estado == "Rechazada" %}
+                        <a href="" class="text-blue-500 hover:underline">Ver detalles</a>
+                    {%endif%}
+
+                    {%if oferta.es_conjunta%}
+                        <a href="" class="text-blue-500 hover:underline">Modificar aporte</a>
+                        <a href="" class="text-blue-500 hover:underline">Salir de la oferta</a>
+                    {%else%}
+                        <a href="" class="text-blue-500 hover:underline">Modificar</a>
+                        <a href="" class="text-blue-500 hover:underline">Eliminar</a>
+                    {%endif%}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 {% block content %}
