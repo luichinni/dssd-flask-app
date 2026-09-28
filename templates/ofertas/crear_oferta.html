@@ -4,23 +4,77 @@
 
 {% block content %}
 
-<form>
-    <label for="nombre">Nombre de la Oferta:</label>
-    <input type="text" id="nombre" name="nombre" required>
+<div class="max-w-2x1 mx-auto space-y-6">
+    <div>
+        <p class = "text-sm font-semibold uppercase tracking-wide text-indigo-600"> Ofertas </p>
+        <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900"> Crear Oferta</h1>
+        <p class="mt-2 text-slate-600"> Elija los recursos que desea ofrecer y la cantidad disponible para cada uno. </p>
+    </div>
 
-    <label for="descripcion">Descripción:</label>
-    <textarea id="descripcion" name="descripcion" required></textarea>
+    <form method="POST" action="{{ url_for('ong.crear_oferta') }}" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+        <div>
+            <label for="id_emergencia" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">Emergencia</label>
+            <input type="number" id="id_emergencia" name="id_emergencia" required class="mt-1 block w-full rounded-lg border-slate-300" placeholder="ID de la emergencia">
+        </div>
 
-    <label for="conjunta">¿Es una oferta conjunta?:</label>
-    <select id="conjunta" name="conjunta" required>
-        <option value="true">Sí</option>
-        <option value="false">No</option>
-    </select>
+        <div>
+            <label for="es_conjunta" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">¿La oferta es conjunta?</label>
+            <select id="es_conjunta" name="es_conjunta" required class="mt-1 block w-full rounded-lg border-slate-300">
+                <option value="">Seleccionar...</option>
+                <option value="true">Sí</option>
+                <option value="false">No</option>
+            </select>
+        </div>
 
-    <label for="detalle">Detalle:</label>
-    <textarea id="detalle" name="detalle" required></textarea>
+        
+    </form>
+</div>
 
-    <button type="submit">Crear Oferta</button> 
-</form>
+<script>
+function agregarRecurso() {
+
+    const container = document.getElementById('recursos-container');
+
+    const fila = document.createElement('div');
+
+    fila.className = 'recurso-row flex gap-3';
+
+    fila.innerHTML = `
+        <select
+            name="id_recurso"
+            required
+            class="flex-1 rounded-lg border-slate-300">
+
+            <option value="">Seleccionar recurso...</option>
+
+            {% for recurso in recursos %}
+                <option value="{{ recurso.id }}">
+                    {{ recurso.nombre }}
+                    (Disponible: {{ recurso.cantidad_disponible }})
+                </option>
+            {% endfor %}
+
+        </select>
+
+        <input
+            type="number"
+            name="cantidad"
+            min="1"
+            required
+            placeholder="Cantidad"
+            class="w-32 rounded-lg border-slate-300">
+
+        <button
+            type="button"
+            onclick="this.parentElement.remove()"
+            class="px-3 py-2 rounded-lg border border-red-200 text-red-600">
+            Eliminar
+        </button>
+    `;
+
+    container.appendChild(fila);
+}
+
+</script>
 
 {% endblock %}
