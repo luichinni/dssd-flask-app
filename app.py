@@ -13,6 +13,7 @@ from src.web.auth_manager import auth_manager
 from src.web.controllers.auth import auth_bp
 from src.web.controllers.users import users_bp
 from src.web.controllers.ong import ong_bp
+from src.web.controllers.emergencies import emergencies_bp
 from flask_login import current_user
 
 load_dotenv()
@@ -36,7 +37,7 @@ def create_app(env="development", static_folder="./static"):
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(ong_bp)
-
+    app.register_blueprint(emergencies_bp)
     @app.context_processor
     def inject_global_data():
         if current_user.is_authenticated and hasattr(current_user, 'rol'):
