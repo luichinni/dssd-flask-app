@@ -1,6 +1,6 @@
 from enum import Enum
 
-class tipo_desastre_enum(str, Enum):
+class TipoDesastreEnum(str, Enum):
     #estos son los tipos de desastres naturales 
     geologico = "Geológico"
     meteorologico = "Meteorológico"
