@@ -8,6 +8,6 @@ class TipoDesastreEnum(str, Enum):
     biologico = "Biológico"
     incendio_forestal = "Incendio Forestal"
 
-    import enum
+ 
 
 

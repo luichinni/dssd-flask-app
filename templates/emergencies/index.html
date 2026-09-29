@@ -11,8 +11,8 @@
             <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Emergencias Activas</h1>
             <p class="text-sm text-slate-600 mt-1">Lista de emergencias que actualmente requieren atención y despliegue de recursos.</p>
         </div>
-        <!-- será emergencias.nueva -->
-        <a href="{{ url_for('emergencias.index') }}" 
+        
+        <a href="{{ url_for('emergencias.create') }}" 
             class="inline-flex items-center justify-center gap-2 whitespace-nowrap bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
             + Agregar emergencia
         </a>
