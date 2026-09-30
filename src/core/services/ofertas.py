@@ -81,9 +81,20 @@ def crear_oferta(id_emergencia, es_conjunta, recursos, id_ong):
         db.session.add(oferta)
         db.session.flush()
 
+        version = VersionOferta(
+            id_oferta=oferta.id_oferta,
+            numero_version=1,
+            fecha_version=datetime.utcnow(),
+            usuario_modificacion=id_ong,
+            estado_version=EstadoOfertaEnum.PENDIENTE.value
+        )
+
+        db.session.add(version)
+        db.session.flush()
+
         for recurso_data in recursos:
             detalle = DetalleVersionOferta(
-                id_version=1,
+                id_version=version.id_version,
                 id_ong=id_ong,
                 id_recurso=recurso_data["id_recurso"],
                 cantidad=recurso_data["cantidad"],

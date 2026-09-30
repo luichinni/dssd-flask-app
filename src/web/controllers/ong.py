@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
-from src.core.enums import RolEnum, TipoRecursoEnum, EstadoActividadEnum
+from src.core.enums import RolEnum, TipoRecursoEnum, EstadoActividadEnum, EstadoOfertaEnum
 from src.web.decorators.roles_required import roles_required
 from src.core.services import inventario, notificaciones, actividades, ofertas, emergencias
 
@@ -320,7 +320,7 @@ def crear_oferta():
 def listado_ofertas():
     lista = ofertas.listar_ofertas()
 
-    return render_template('ofertas/listado_ofertas.html', ofertas=lista)
+    return render_template('ofertas/listado_ofertas.html', ofertas=lista, EstadoOfertaEnum=EstadoOfertaEnum)
 
 @ong_bp.route('/ofertas/<int:id_oferta>/modificar', methods=['GET', 'POST'])
 @login_required
