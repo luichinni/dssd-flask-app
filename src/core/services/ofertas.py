@@ -1,9 +1,29 @@
-from src.core.models import Oferta
+from src.core.models import (
+    Oferta,
+    VersionOferta,
+    DetalleVersionOferta,
+    InventarioONG
+)
+from src.core.enums import EstadoOfertaEnum
+from src.core.database import db
 
-def crear_oferta():
-    """Lleva a la pagina de creacion de ofertas."""
-    pass
+def listar_ofertas():
+    return Oferta.query.all()
 
-def guardar_oferta():
-    """Guarda la oferta en la base de datos."""
-    pass
+def obtener_oferta(id_oferta):
+    return Oferta.query.get(id_oferta)
+
+def crear_oferta(ong, nombre, descripcion, emergencia, detalles):
+    """Crea una nueva oferta en la base de datos."""
+    oferta = Oferta(
+        ong=ong,
+        nombre=nombre,
+        descripcion=descripcion,
+        emergencia=emergencia,
+        detalles=detalles
+    )
+
+    db.session.add(oferta)
+    db.session.flush()
+
+    
