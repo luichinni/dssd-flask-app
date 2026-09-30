@@ -7,6 +7,10 @@ from src.core.models.detalle_version_oferta import DetalleVersionOferta
 from src.core.models.inventario import InventarioONG
 from src.core.enums import EstadoOfertaEnum
 
+def listar_ofertas():
+    """Devuelve todas las ofertas."""
+    return Oferta.query.all()
+
 def _validar_recursos(recursos, id_ong):
     """
     Verifica que haya al menos un recurso, que no se repitan, cantidades válidas y que correspondan a la ONG.
