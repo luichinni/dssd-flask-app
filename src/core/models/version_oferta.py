@@ -8,7 +8,7 @@ class VersionOferta(db.Model):
     id_oferta = db.Column(db.Integer, db.ForeignKey('ofertas.id_oferta'), nullable=False)
     numero_version = db.Column(db.Integer, nullable=False)
     fecha_version = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    usuario_modificacion = db.Column(db.Integer(20), db.ForeignKey('usuarios.id'), nullable=True)
+    usuario_modificacion = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     observaciones = db.Column(db.Text, nullable=True)
     estado_version = db.Column(db.String(30), nullable=False, default='pendiente')
 
