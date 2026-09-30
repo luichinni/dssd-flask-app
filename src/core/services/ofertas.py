@@ -1,33 +1,27 @@
-
 from datetime import datetime
 
 from src.core.database import db
-
 from src.core.models.oferta import Oferta
 from src.core.models.version_oferta import VersionOferta
 from src.core.models.detalle_version_oferta import DetalleVersionOferta
 from src.core.models.inventario import InventarioONG
+from src.core.enums import EstadoVersionOferta
 
-
-def crear_oferta(id_emergencia, es_conjunta, recursos, id_ong):
+def _validar_recursos(recursos, id_ong):
     """
-    Crea una nueva oferta junto con su primera versión
-    y los detalles de los recursos ofrecidos.
+    Verifica que haya al menos un recurso, que no se repitan, cantidades válidas y que correspondan a la ONG.
     """
-
-    if not id_emergencia:
-        raise ValueError("Debe seleccionar una emergencia.")
 
     if not recursos:
         raise ValueError("Debe seleccionar al menos un recurso.")
 
-    # Chequea que no repita recursos
     ids_recursos = [r["id_recurso"] for r in recursos]
 
     if len(ids_recursos) != len(set(ids_recursos)):
         raise ValueError("No se puede repetir un recurso dentro de una oferta.")
 
-    # Verificar recursos y cantidades
+    recursos_modelos = {}
+
     for recurso_data in recursos:
 
         recurso = InventarioONG.query.filter_by(
@@ -53,46 +47,52 @@ def crear_oferta(id_emergencia, es_conjunta, recursos, id_ong):
                 f"Disponible: {recurso.cantidad_disponible}."
             )
 
-    # Creo la oferta
-    oferta = Oferta(
-        id_emergencia=id_emergencia,
-        es_conjunta=es_conjunta,
-        fecha_creacion=datetime.utcnow(),
-        fecha_ultima_modificacion=datetime.utcnow(),
-        version_actual=1
-    )
+        recursos_modelos[recurso.id] = recurso
+    
+    return recursos_modelos
 
-    db.session.add(oferta)
-    db.session.flush()
+def crear_oferta(id_emergencia, es_conjunta, recursos, id_ong):
+    """
+    Crea una nueva oferta junto con su primera versión
+    y los detalles de los recursos ofrecidos.
+    """
 
-    # Crear la primera versión
-    version = VersionOferta(
-        id_oferta=oferta.id_oferta,
-        numero_version=1,
-        fecha_version=datetime.utcnow(),
-        usuario_modificacion=id_ong,
-        estado_version="pendiente"
-    )
+    if not id_emergencia:
+        raise ValueError("Debe seleccionar una emergencia.")
 
-    db.session.add(version)
-    db.session.flush()
+    if not recursos:
+        raise ValueError("Debe seleccionar al menos un recurso.")
 
-    # Crear los detalles
-    for recurso_data in recursos:
+    recursos_modelos = _validar_recursos(recursos, id_ong)
 
-        detalle = DetalleVersionOferta(
-            id_version=version.id_version,
-            id_ong=id_ong,
-            id_recurso=recurso_data["id_recurso"],
-            cantidad=recurso_data["cantidad"],
-            cantidad_adjudicada=0
+    try: 
+        oferta = Oferta(
+            id_emergencia=id_emergencia,
+            es_conjunta=es_conjunta,
+            version_actual=1,
+            fecha_ultima_modificacion=datetime.utcnow(),
+            fecha_creacion=datetime.utcnow()
         )
 
-        db.session.add(detalle)
+        db.session.add(oferta)
+        db.session.flush()
 
-    db.session.commit()
+        for recurso_data in recursos:
+            detalle = DetalleVersionOferta(
+                id_version=1,
+                id_ong=id_ong,
+                id_recurso=recurso_data["id_recurso"],
+                cantidad=recurso_data["cantidad"],
+                cantidad_adjudicada=0
+            )
 
-    return oferta
+            db.session.add(detalle)
+
+        db.session.commit()
+        return oferta
+    except:
+        db.session.rollback()
+        raise
 
 
 def obtener_oferta_para_modificar(id_oferta, id_ong):
@@ -101,12 +101,12 @@ def obtener_oferta_para_modificar(id_oferta, id_ong):
     versión actual.
     """
 
-    oferta = Oferta.query.get(id_oferta)
+    oferta = db.session.get(Oferta, id_oferta)
 
     if oferta is None:
         raise ValueError("La oferta no existe.")
 
-    # Buscar la versión actual
+    # se busca la versión actual
     version = VersionOferta.query.filter_by(
         id_oferta=oferta.id_oferta,
         numero_version=oferta.version_actual
@@ -127,14 +127,9 @@ def obtener_oferta_para_modificar(id_oferta, id_ong):
     return oferta, version
 
 
-def modificar_oferta(
-    id_oferta,
-    es_conjunta,
-    recursos,
-    id_ong
-):
+def modificar_oferta(id_oferta, es_conjunta, recursos, id_ong):
     """
-    Modifica una oferta y crea una nueva versión de la misma
+    Modifica una oferta y crea una nueva versión de la misma, pero modifica sus propios recursos solamente
     """
 
     oferta, version_actual = obtener_oferta_para_modificar(
@@ -151,9 +146,10 @@ def modificar_oferta(
     if len(ids_recursos) != len(set(ids_recursos)):
         raise ValueError("No se puede repetir un recurso dentro de una oferta.")
 
-    # Verificar recursos y cantidades
-    for recurso_data in recursos:
+    detalles_ong_actual = [detalle for detalle in version_actual.detalles if detalle.id_ong == id_ong]
+    detalles_previos = {detalle.id_recurso: detalle for detalle in detalles_ong_actual}
 
+    for recurso_data in recursos:
         recurso = InventarioONG.query.filter_by(
             id=recurso_data["id_recurso"],
             ong_id=id_ong
@@ -171,62 +167,57 @@ def modificar_oferta(
                 f"La cantidad del recurso '{recurso.nombre}' debe ser mayor a 0."
             )
 
-        # Buscar si este recurso ya estaba en la versión anterior
-        detalle_anterior = next(
-            (
-                detalle
-                for detalle in version_actual.detalles
-                if detalle.id_recurso == recurso.id
-            ),
-            None
-        )
+        cant_disponible_real = recurso.cantidad_disponible
+        detalle_previo = detalles_previos.get(recurso.id)
 
-        cantidad_disponible_real = recurso.cantidad_disponible
+        if detalle_previo is not None:
+            cant_disponible_real += detalle_previo.cantidad
 
-        # Si el recurso ya estaba ofrecido en la versión anterior,
-        # se puede volver a utilizar esa cantidad.
-        if detalle_anterior is not None:
-            cantidad_disponible_real += detalle_anterior.cantidad
-
-        if cantidad > cantidad_disponible_real:
+        if cantidad > cant_disponible_real:
             raise ValueError(
                 f"No hay suficiente cantidad disponible de '{recurso.nombre}'. "
-                f"Disponible para esta modificación: "
-                f"{cantidad_disponible_real}."
+                f"Disponible: {cant_disponible_real}."
             )
-
-    # Crear nueva versión
-    nuevo_numero_version = oferta.version_actual + 1
-
-    nueva_version = VersionOferta(
-        id_oferta=oferta.id_oferta,
-        numero_version=nuevo_numero_version,
-        fecha_version=datetime.utcnow(),
-        usuario_modificacion=id_ong,
-        estado_version="pendiente"
-    )
-
-    db.session.add(nueva_version)
-    db.session.flush()
-
-    # Crear detalles de la nueva versión
-    for recurso_data in recursos:
-
-        detalle = DetalleVersionOferta(
-            id_version=nueva_version.id_version,
-            id_ong=id_ong,
-            id_recurso=recurso_data["id_recurso"],
-            cantidad=recurso_data["cantidad"],
-            cantidad_adjudicada=0
+    try: 
+        nuevo_num_version = oferta.version_actual + 1
+        nueva_version = VersionOferta(
+            id_oferta=oferta.id_oferta,
+            numero_version=nuevo_num_version,
+            fecha_version=datetime.utcnow(),
+            usuario_modificacion=id_ong,
+            estado_version=EstadoVersionOferta.PENDIENTE.value
         )
+        db.session.add(nueva_version)
+        db.session.flush()
 
-        db.session.add(detalle)
+        for detalle_anterior in version_actual.detalles:
+            if detalle_anterior.id_ong != id_ong:
+                nuevo_detalle = DetalleVersionOferta(
+                    id_version=nueva_version.id_version,
+                    id_ong=detalle_anterior.id_ong,
+                    id_recurso=detalle_anterior.id_recurso,
+                    cantidad=detalle_anterior.cantidad,
+                    cantidad_adjudicada=0
+                    )
+                db.session.add(nuevo_detalle)
 
-    # Actualizar la oferta
-    oferta.version_actual = nuevo_numero_version
-    oferta.es_conjunta = es_conjunta
-    oferta.fecha_ultima_modificacion = datetime.utcnow()
+        for recurso_data in recursos:
+            nuevo_detalle = DetalleVersionOferta(
+                id_version=nueva_version.id_version,
+                id_ong=id_ong,
+                id_recurso=recurso_data["id_recurso"],
+                cantidad=recurso_data["cantidad"],
+                cantidad_adjudicada=0
+            )
+            db.session.add(nuevo_detalle)
 
-    db.session.commit()
+        oferta.version_actual = nuevo_num_version
+        oferta.fecha_ultima_modificacion = datetime.utcnow()
+        oferta.es_conjunta = es_conjunta
 
-    return oferta
+        db.session.commit()
+        return oferta
+
+    except Exception as e:
+        db.session.rollback()
+        raise ValueError(f"Error al crear la nueva versión de la oferta: {str(e)}")

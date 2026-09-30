@@ -11,9 +11,9 @@
         <p class="mt-2 text-slate-600"> Actualice los recursos que desea ofrecer y la cantidad disponible para cada uno. </p>
     </div>
 
-    <form method="POST" action="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id) }}" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+    <form method="POST" action="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id_oferta) }}" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
         <!-- ID Oferta -->
-        <input type="hidden" name="id_oferta" value="{{ oferta.id }}">
+        <input type="hidden" name="id_oferta" value="{{ oferta.id_oferta }}">
         <div>
             <label for="id_emergencia" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">Emergencia</label>
             <select id="id_emergencia" disabled name="id_emergencia" required class="mt-1 block w-full rounded-lg border-slate-300">

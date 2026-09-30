@@ -19,3 +19,7 @@ def crear_emergencia(tipo_desastre: str, nivel_gravedad: str, zona_afectada: str
     db.session.add(nueva_emergencia)
     db.session.commit()
     return nueva_emergencia
+
+def listar_todas_las_emergencias():
+    """Devuelve todas las emergencias disponibles para que una ONG pueda realizar una oferta."""
+    return Emergencia.query.order_by(Emergencia.created_at.desc()).all()

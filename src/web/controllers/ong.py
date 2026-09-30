@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from src.core.enums import RolEnum, TipoRecursoEnum, EstadoActividadEnum
 from src.web.decorators.roles_required import roles_required
-from src.core.services import inventario, notificaciones, actividades
+from src.core.services import inventario, notificaciones, actividades, ofertas, emergencias
 
 ong_bp = Blueprint('ong', __name__, url_prefix='/ong')
 
@@ -213,3 +213,224 @@ def actividad_finalizar(id):
         return redirect(url_for('ong.actividades_index'))
 
     return render_template('ong/actividades/finalizar.html', actividad=actividad)
+
+# ==============================================================================
+# OFERTAS
+# ==============================================================================
+
+@ong_bp.route('/ofertas/crear', methods=['GET', 'POST'])
+@login_required
+@roles_required(RolEnum.ONG)
+def crear_oferta():
+
+    if request.method == 'POST':
+
+        # Info general
+        id_emergencia = request.form.get('id_emergencia')
+
+        es_conjunta_str = request.form.get(
+            'es_conjunta',
+            'false'
+        )
+
+        es_conjunta = (
+            es_conjunta_str.lower() == 'true'
+        )
+
+        # Recursos elegidos
+        ids_recursos = request.form.getlist(
+            'id_recurso'
+        )
+
+        recursos = []
+
+        for id_recurso in ids_recursos:
+
+            try:
+                id_recurso = int(id_recurso)
+
+                cantidad = int(
+                    request.form.get(
+                        f'cantidad_{id_recurso}',
+                        '0'
+                    )
+                )
+
+            except (TypeError, ValueError):
+
+                flash(
+                    'La cantidad de los recursos debe ser válida.',
+                    'error'
+                )
+
+                return redirect(
+                    url_for('ong.crear_oferta')
+                )
+
+            recursos.append({
+                'id_recurso': id_recurso,
+                'cantidad': cantidad
+            })
+
+        # Crear oferta
+        try:
+
+            oferta = ofertas.crear_oferta(
+                id_emergencia=id_emergencia,
+                es_conjunta=es_conjunta,
+                recursos=recursos,
+                id_ong=current_user.id
+            )
+
+            flash(
+                f'Oferta #{oferta.id_oferta} creada correctamente.',
+                'success'
+            )
+
+            return redirect(
+                url_for('ong.listado_ofertas')
+            )
+
+        except ValueError as e:
+
+            flash(str(e), 'error')
+
+            return redirect(
+                url_for('ong.crear_oferta')
+            )
+
+    #Lo que sigue con Get
+    lista_emergencias = (
+        emergencias.listar_todas_las_emergencias()
+    )
+
+    inventario_ong = inventario.listar_inventario(
+        current_user.id
+    )
+
+    return render_template(
+        'ofertas/crear_oferta.html',
+        emergencias=lista_emergencias,
+        inventario=inventario_ong
+    )
+
+
+@ong_bp.route('/ofertas/<int:id_oferta>/modificar', methods=['GET', 'POST'])
+@login_required
+@roles_required(RolEnum.ONG)
+def modificar_oferta(id_oferta):
+
+    # Obtener oferta y verificar que la ONG participe
+    try:
+
+        oferta, version_actual = (
+            ofertas.obtener_oferta_para_modificar(
+                id_oferta=id_oferta,
+                id_ong=current_user.id
+            )
+        )
+
+    except ValueError as e:
+
+        flash(str(e), 'error')
+
+        return redirect(
+            url_for('ong.listado_ofertas')
+        )
+
+    if request.method == 'POST':
+
+        es_conjunta_str = request.form.get(
+            'es_conjunta',
+            'false'
+        )
+
+        es_conjunta = (
+            es_conjunta_str.lower() == 'true'
+        )
+
+        # Recursos elegidos
+        ids_recursos = request.form.getlist(
+            'id_recurso'
+        )
+
+        recursos = []
+
+        for id_recurso in ids_recursos:
+
+            try:
+
+                id_recurso = int(id_recurso)
+
+                cantidad = int(
+                    request.form.get(
+                        f'cantidad_{id_recurso}',
+                        '0'
+                    )
+                )
+
+            except (TypeError, ValueError):
+
+                flash(
+                    'La cantidad de los recursos debe ser válida.',
+                    'error'
+                )
+
+                return redirect(
+                    url_for(
+                        'ong.modificar_oferta',
+                        id_oferta=id_oferta
+                    )
+                )
+
+            recursos.append({
+                'id_recurso': id_recurso,
+                'cantidad': cantidad
+            })
+
+        # Modificar oferta
+        try:
+
+            oferta = ofertas.modificar_oferta(
+                id_oferta=id_oferta,
+                es_conjunta=es_conjunta,
+                recursos=recursos,
+                id_ong=current_user.id
+            )
+
+            flash(
+                f'Oferta #{oferta.id_oferta} modificada correctamente.',
+                'success'
+            )
+
+            return redirect(
+                url_for('ong.listado_ofertas')
+            )
+
+        except ValueError as e:
+
+            flash(str(e), 'error')
+
+            return redirect(
+                url_for(
+                    'ong.modificar_oferta',
+                    id_oferta=id_oferta
+                )
+            )
+
+    #Lo que queda con GET
+    lista_emergencias = (
+        emergencias.listar_todas_las_emergencias()
+    )
+
+    inventario_ong = inventario.listar_inventario(
+        current_user.id
+    )
+
+    return render_template(
+        'ofertas/modificar_oferta.html',
+        oferta=oferta,
+        version_actual=version_actual,
+        emergencias=lista_emergencias,
+        inventario=inventario_ong
+    )

@@ -50,11 +50,10 @@
                     {%endif%}
 
                     {%if oferta.es_conjunta%}
-                        <a href="" class="text-blue-500 hover:underline">Modificar aporte</a>
+                        <a href="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id_oferta) }}" class="text-blue-500 hover:underline">Modificar aporte</a>
                         <a href="" class="text-blue-500 hover:underline">Salir de la oferta</a>
                     {%else%}
-                        <a href="" class="text-blue-500 hover:underline">Modificar</a>
-                        <a href="" class="text-blue-500 hover:underline">Eliminar</a>
+                        <a href="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id_oferta) }}" class="text-blue-500 hover:underline">Modificar</a>
                     {%endif%}
                 </td>
             </tr>
