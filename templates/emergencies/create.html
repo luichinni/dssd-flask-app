@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+
+{% block title %}Nueva Emergencia - RescueSync{% endblock %}
+
+{% block content %}
+
+<div class="max-w-2xl mx-auto space-y-6">
+
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Registrar Emergencia</h1>
+        <p class="text-sm text-slate-600 mt-1">Completá los datos para reportar una nueva emergencia.</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('emergencias.create') }}" class="space-y-4 bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+        <div>
+            <label for="tipo_desastre" class="block text-sm font-semibold text-slate-700 mb-1">Tipo de desastre</label>
+            <select id="tipo_desastre" name="tipo_desastre" required
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                {% for tipo in tipos_desastre %}
+                    <option value="{{ tipo.value }}">{{ tipo.value }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="nivel_gravedad" class="block text-sm font-semibold text-slate-700 mb-1">Nivel de gravedad</label>
+            <select id="nivel_gravedad" name="nivel_gravedad" required
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                {% for nivel in niveles_gravedad %}
+                    <option value="{{ nivel.value }}">{{ nivel.name.capitalize() }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label for="zona_afectada" class="block text-sm font-semibold text-slate-700 mb-1">Zona afectada</label>
+            <input type="text" id="zona_afectada" name="zona_afectada" required maxlength="100"
+                   class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                   placeholder="Ej: Barrio Norte, calle 123">
+        </div>
+
+        <div>
+            <label for="descripcion" class="block text-sm font-semibold text-slate-700 mb-1">Descripción</label>
+            <textarea id="descripcion" name="descripcion" required maxlength="255" rows="4"
+                      class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                      placeholder="Detalles de la emergencia..."></textarea>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-2">
+            <a href="{{ url_for('emergencias.index') }}"
+               class="inline-flex items-center justify-center whitespace-nowrap text-sm font-semibold text-slate-600 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors">
+                Cancelar
+            </a>
+            <!-- El botón de submit envía el formulario al endpoint 'emergencias.create' --> 
+            <button type="submit"
+                class="inline-flex items-center justify-center whitespace-nowrap bg-blue-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                Guardar emergencia
+            </button>
+        </div>
+
+    </form>
+
+</div>
+
+{% endblock %}
