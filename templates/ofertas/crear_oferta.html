@@ -1,20 +1,20 @@
 {% extends "layout.html" %}
 
-{% block title %}Crear Oferta - Sistema de Emergencias Municipales{% endblock %}
+{% block title %}Modificar Oferta - Sistema de Emergencias Municipales{% endblock %}
 
 {% block content %}
 
 <div class="max-w-2x1 mx-auto space-y-6">
     <div>
         <p class = "text-sm font-semibold uppercase tracking-wide text-indigo-600"> Ofertas </p>
-        <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900"> Crear Oferta</h1>
-        <p class="mt-2 text-slate-600"> Elija los recursos que desea ofrecer y la cantidad disponible para cada uno. </p>
+        <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900"> Modificar Oferta</h1>
+        <p class="mt-2 text-slate-600"> Actualice los recursos que desea ofrecer y la cantidad disponible para cada uno. </p>
     </div>
 
-    <form method="POST" action="{{ url_for('ong.crear_oferta') }}" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+    <form method="POST" action="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id) }}" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
         <div>
             <label for="id_emergencia" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">Emergencia</label>
-            <select id="id_emergencia" name="id_emergencia" required class="mt-1 block w-full rounded-lg border-slate-300">
+            <select disabled id="id_emergencia" name="id_emergencia" required class="mt-1 block w-full rounded-lg border-slate-300">
                 <option value="">Seleccionar...</option>
                 {% for emergencia in emergencias %}
                     <option value="{{ emergencia.id }}"> {{ emergencia.id }} - {{ emergencia.zona_afectada }} </option>
