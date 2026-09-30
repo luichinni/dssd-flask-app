@@ -36,7 +36,7 @@ def create():
     # Por ahora, simplemente redirigimos al listado de emergencias.
     crear_emergencia(
         tipo_desastre=request.form['tipo_desastre'],
-        nivel_gravedad=request.form['nivel_gravedad'],
+        nivel_gravedad=int(request.form['nivel_gravedad']),
         zona_afectada=request.form['zona_afectada'],
         descripcion=request.form['descripcion'],
         reportante_id=current_user.id
