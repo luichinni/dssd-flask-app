@@ -7,4 +7,4 @@ from .version_oferta import VersionOferta
 from .detalle_version_oferta import DetalleVersionOferta
 
 
-__all__ = ["Usuario", "InventarioONG", "Notificacion", "ActividadONG", "Oferta", "VersionOferta", "DetalleVersionOferta"]
+__all__ = ["Usuario", "InventarioONG", "Notificacion", "ActividadONG", "Emergencia", "Oferta", "VersionOferta", "DetalleVersionOferta"]
