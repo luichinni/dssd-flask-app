@@ -314,6 +314,13 @@ def crear_oferta():
         inventario=inventario_ong
     )
 
+@ong_bp.route('/ofertas/listado', methods=['GET'])
+@login_required
+@roles_required(RolEnum.ONG)
+def listado_ofertas():
+    lista = ofertas.listar_ofertas()
+
+    return render_template('ofertas/listado_ofertas.html', ofertas=lista)
 
 @ong_bp.route('/ofertas/<int:id_oferta>/modificar', methods=['GET', 'POST'])
 @login_required

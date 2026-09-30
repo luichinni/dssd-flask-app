@@ -5,7 +5,7 @@ from src.core.models.oferta import Oferta
 from src.core.models.version_oferta import VersionOferta
 from src.core.models.detalle_version_oferta import DetalleVersionOferta
 from src.core.models.inventario import InventarioONG
-from src.core.enums import EstadoVersionOferta
+from src.core.enums import EstadoOfertaEnum
 
 def _validar_recursos(recursos, id_ong):
     """
@@ -185,7 +185,7 @@ def modificar_oferta(id_oferta, es_conjunta, recursos, id_ong):
             numero_version=nuevo_num_version,
             fecha_version=datetime.utcnow(),
             usuario_modificacion=id_ong,
-            estado_version=EstadoVersionOferta.PENDIENTE.value
+            estado_version=EstadoOfertaEnum.PENDIENTE.value
         )
         db.session.add(nueva_version)
         db.session.flush()
