@@ -15,7 +15,7 @@ class Usuario(UserMixin, db.Model):
 
     # Campo JSONB flexible
     # Con esto a cada rol podemos agregarle campos propios 
-    datos_adicionales = db.Column(JSONB, nullable=True, default={})
+    datos_adicionales = db.Column(JSONB, nullable=True, default=dict)
 
     # Definición del campo con RolEnum
     rol = db.Column(
