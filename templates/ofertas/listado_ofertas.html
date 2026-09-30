@@ -23,7 +23,7 @@
                 <td>{{ oferta.id }}</td>
                 <td>{{ oferta.nombre_emergencia }}</td>
                 <td>{{ oferta.version }}</td>
-                <td>{{ oferta.estado }}</td>
+                <td>{{ oferta.estado.value }}</td>
                 <td>
                     {% if oferta.es_conjunta %}
                         Sí
@@ -45,7 +45,7 @@
                     </div>
                 </td>
                 <td>
-                    {% if oferta.estado == "Aceptada" or oferta.estado == "Rechazada" %}
+                    {% if oferta.estado != EstadoOfertaEnum.PENDIENTE %}
                         <a href="" class="text-blue-500 hover:underline">Ver detalles</a>
                     {%endif%}
 

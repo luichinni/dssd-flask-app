@@ -1,5 +1,6 @@
 from datetime import datetime
 from src.core.database import db
+from src.core.enums import EstadoOfertaEnum
 
 class Oferta(db.Model):
     __tablename__ = 'ofertas'
@@ -8,7 +9,11 @@ class Oferta(db.Model):
     id_emergencia = db.Column(db.Integer, nullable=False)
 
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
-    estado = db.Column(db.String(20), nullable=False, default='pendiente')
+    estado = db.Column(
+        db.Enum(EstadoOfertaEnum, values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
+        default=EstadoOfertaEnum.PENDIENTE,
+    )
     version_actual = db.Column(db.Integer, nullable=False, default=1)
     es_conjunta = db.Column(db.Boolean, nullable=False, default=False)
     fecha_ultima_modificacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
