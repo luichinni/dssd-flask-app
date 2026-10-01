@@ -7,12 +7,18 @@ from sqlalchemy.exc import SQLAlchemyError
 from src.core.enums import RolEnum
 from src.core.models.recurso_catalogo import RecursoCatalogo
 from src.core.services.lotes import (
+    cantidades_ofertadas_por_recurso,
+    continuar_con_ofertas_disponibles,
     emergencia_activa,
     estado_lote,
+    evaluar_minimos_lote,
     listar_emergencias_activas,
     listar_emergencias,
     listar_lotes,
+    lote_requiere_decision,
     publicar_lote,
+    reabrir_convocatoria,
+    reformular_lote,
     reintentar_lote,
 )
 from src.web.decorators.roles_required import roles_required
@@ -50,6 +56,15 @@ def lotes():
     recursos = RecursoCatalogo.query.order_by(RecursoCatalogo.nombre.asc()).all()
     publicaciones = listar_lotes()
     estados = {lote.id: estado_lote(lote) for lote in publicaciones}
+    cantidades_por_emergencia = {}
+    evaluaciones = {}
+    requiere_decision = {}
+    for lote in publicaciones:
+        if lote.emergencia_id not in cantidades_por_emergencia:
+            cantidades_por_emergencia[lote.emergencia_id] = cantidades_ofertadas_por_recurso(lote.emergencia_id)
+        cantidades = cantidades_por_emergencia[lote.emergencia_id]
+        evaluaciones[lote.id] = evaluar_minimos_lote(lote, cantidades)
+        requiere_decision[lote.id] = lote_requiere_decision(lote, cantidades)
     reintento_cierres = {
         lote.id: (datetime.now(timezone.utc) + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M')
         for lote in publicaciones
@@ -93,8 +108,51 @@ def lotes():
         default_cierre=default_cierre,
         publicaciones=publicaciones,
         estados=estados,
+        evaluaciones=evaluaciones,
+        requiere_decision=requiere_decision,
         reintento_cierres=reintento_cierres,
     )
+
+
+@ccr_bp.post('/lotes/<int:lote_id>/decision')
+@login_required
+@roles_required(RolEnum.CENTRO_COORDINADOR)
+def decidir_lote(lote_id: int):
+    try:
+        decision = request.form.get('decision', '')
+        if decision == 'reabrir':
+            fecha_cierre = datetime.fromisoformat(request.form.get('fecha_cierre_ofertas', ''))
+            lote = reabrir_convocatoria(lote_id, fecha_cierre)
+            mensaje = f'Convocatoria del lote #{lote.id} reabierta sin modificar sus recursos.'
+        elif decision == 'reformular':
+            recurso_ids = request.form.getlist('recurso_id')
+            cantidades = request.form.getlist('cantidad_necesaria')
+            minimos = request.form.getlist('min_r')
+            if not (len(recurso_ids) == len(cantidades) == len(minimos)):
+                raise ValueError('Completa recurso, cantidad y mínimo requerido para cada fila.')
+            detalles = [
+                {
+                    'recurso_id': recurso_id,
+                    'cantidad_necesaria': cantidad,
+                    'min_r': min_r,
+                }
+                for recurso_id, cantidad, min_r in zip(recurso_ids, cantidades, minimos)
+            ]
+            fecha_cierre = datetime.fromisoformat(request.form.get('fecha_cierre_ofertas', ''))
+            lote = reformular_lote(lote_id, detalles, fecha_cierre)
+            mensaje = f'Lote #{lote.id} reformulado y publicado nuevamente.'
+        elif decision == 'continuar':
+            aceptadas = continuar_con_ofertas_disponibles(lote_id)
+            mensaje = f'Se continúa con las ofertas disponibles; {aceptadas} oferta(s) pendiente(s) aceptada(s).'
+        else:
+            raise ValueError('Selecciona una alternativa válida para el lote.')
+    except ValueError as error:
+        flash(str(error), 'error')
+    except SQLAlchemyError:
+        flash('No se pudo aplicar la decisión del lote. Inténtalo nuevamente.', 'error')
+    else:
+        flash(mensaje, 'success')
+    return redirect(url_for('ccr.lotes'))
 
 
 @ccr_bp.post('/lotes/<int:lote_id>/reintentar')
