@@ -1,5 +1,7 @@
 from src.core.database import db
 from src.core.models.emergencia import Emergencia
+from src.core.services.bonita import BonitaError, iniciar_proceso
+from flask import current_app
 
 def listar_emergencias(reportante_id: int):
     """Devuelve todas las emergencias registradas por reportante, si no tiene emergencias devuelve una lista vacía."""
@@ -7,7 +9,7 @@ def listar_emergencias(reportante_id: int):
 
 
 def crear_emergencia(tipo_desastre: str, nivel_gravedad: int, zona_afectada: str, descripcion: str, reportante_id: int, municipio_id: int):
-    """Crea una nueva emergencia y la guarda en la base de datos."""
+    """Guarda la emergencia y crea su caso BPM, sin reintentos automáticos."""
     nueva_emergencia = Emergencia(
 
         tipo_desastre=tipo_desastre,
@@ -17,8 +19,27 @@ def crear_emergencia(tipo_desastre: str, nivel_gravedad: int, zona_afectada: str
         responsable_id=reportante_id,
         municipio_id=municipio_id,
     )
+    nueva_emergencia.bonita_estado = "iniciando"
     db.session.add(nueva_emergencia)
     db.session.commit()
+
+    # El ID local debe existir antes de iniciar un proceso externo.
+    # Conservar la emergencia permite investigar resultados inciertos sin
+    # crear otra emergencia/caso automáticamente.
+    try:
+        nueva_emergencia.bonita_case_id = iniciar_proceso(
+            {"id_emergencia_init": nueva_emergencia.id}
+        )
+    except BonitaError as error:
+        nueva_emergencia.bonita_estado = "no_confirmado"
+        db.session.commit()
+        current_app.logger.warning(
+            "No se confirmó el caso de la emergencia %s: %s",
+            nueva_emergencia.id, error,
+        )
+    else:
+        nueva_emergencia.bonita_estado = "vinculada"
+        db.session.commit()
     return nueva_emergencia
 
 def listar_todas_las_emergencias():
