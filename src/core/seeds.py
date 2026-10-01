@@ -29,8 +29,8 @@ def seed(app):
         seed_ong_data()
         seed_emergencies_data()
         print('🌱 Seedeando datos de Ofertas...')
-        seed_ofertas_data()
         seed_ccr_data()
+        seed_ofertas_data()
         seed_oferta_colaborativa_data()
         print("🌱 Finalización de la carga de datos iniciales (Seeding)!")
 
@@ -367,98 +367,131 @@ def seed_emergencies_data():
 
     db.session.commit()
 
-"""
+
 def seed_ofertas_data():
-    
-    if not ong_usuario:
-        print('  [!] Usuario ONG no encontrado. Saltando seeding de Ofertas.')
+    ong_usuario = Usuario.query.filter_by(email='ong@ayuda.org').first()
+    emergencia = Emergencia.query.filter_by(zona_afectada='CCR - Convocatoria publicada').first()
+    if ong_usuario is None or emergencia is None:
+        print('  [!] Falta el usuario ONG o la emergencia seed. Se omite la oferta adjudicable.')
         return
 
-    ong_id = (ong_usuario.datos_adicionales or {}).get('ong_id')
-    ong_profile = db.session.get(ONG, int(ong_id)) if ong_id is not None else None
-    if not ong_profile:
-        print('  [!] Perfil de ONG no encontrado. Saltando seeding de Ofertas.')
+    try:
+        ong_id = int((ong_usuario.datos_adicionales or {}).get('ong_id'))
+    except (TypeError, ValueError):
+        print('  [!] El usuario ONG no tiene un perfil asociado.')
         return
 
-    recurso_paramedicos = RecursoCatalogo.query.filter_by(nombre='Paramédicos de Emergencia').first()
-    recurso_alimento = RecursoCatalogo.query.filter_by(nombre='Raciones de Alimento Seco').first()
-    if not recurso_paramedicos or not recurso_alimento:
-        print('  [!] Recursos base no encontrados. Saltando seeding de Ofertas.')
+    ong_profile = db.session.get(ONG, ong_id)
+    municipio_id = (emergencia.responsable.datos_adicionales or {}).get('municipio_id')
+    municipio = db.session.get(Municipio, int(municipio_id)) if municipio_id is not None else None
+    recurso = RecursoCatalogo.query.filter_by(nombre='Paramédicos de Emergencia').first()
+    ccr_usuario = Usuario.query.filter_by(rol=RolEnum.CENTRO_COORDINADOR).first()
+    if not ong_profile or not municipio or not recurso or not ccr_usuario:
+        print('  [!] Faltan ONG, municipio, recurso o usuario CCR para la oferta seed.')
         return
 
-    emergencia_terremoto = Emergencia.query.filter_by(zona_afectada='Barrio Ribereño, Quilmes').first()
-    emergencia_tormenta = Emergencia.query.filter_by(zona_afectada='Zona Forestal, La Plata').first()
-    if not emergencia_terremoto or not emergencia_tormenta:
-        print('  [!] Emergencias base no encontradas. Saltando seeding de Ofertas.')
-        return
+    lote = LoteNecesidades.query.filter_by(emergencia_id=emergencia.id).first()
+    if lote is None:
+        lote = LoteNecesidades(
+            emergencia=emergencia,
+            fecha_inicio_ofertas=datetime.now(timezone.utc) - timedelta(hours=1),
+            fecha_cierre_ofertas=datetime.now(timezone.utc) + timedelta(days=2),
+        )
+        lote.detalles.append(LoteDetalle(
+            recurso=recurso,
+            cantidad_necesaria=40,
+            cantidad_minima=15,
+        ))
+        db.session.add(lote)
+        db.session.flush()
 
-    ofertas_base = [
-        {
-            'emergencia': emergencia_terremoto,
-            'estado': EstadoOfertaEnum.ACEPTADA,
-            'es_conjunta': False,
-            'recurso': recurso_paramedicos,
-            'cantidad': 5,
-            'observaciones': 'Disponemos de 5 paramédicos certificados listos para despliegue inmediato.',
-        },
-        {
-            'emergencia': emergencia_terremoto,
-            'estado': EstadoOfertaEnum.PENDIENTE,
-            'es_conjunta': False,
-            'recurso': recurso_alimento,
-            'cantidad': 300,
-            'observaciones': 'Oferta de raciones aún en revisión por el Sistema Nacional.',
-        },
-        {
-            'emergencia': emergencia_tormenta,
-            'estado': EstadoOfertaEnum.ACEPTADA,
-            'es_conjunta': True,
-            'recurso': recurso_alimento,
-            'cantidad': 800,
-            'observaciones': 'Oferta conjunta con otra ONG de la red para cubrir la zona afectada.',
-        },
-    ]
+    inventario = InventarioONG.query.filter_by(
+        ong_id=ong_id,
+        id_recurso=recurso.id,
+    ).first()
+    if inventario is None:
+        inventario = InventarioONG(
+            ong_id=ong_id,
+            recurso=recurso,
+            cantidad_total=15,
+            cantidad_disponible=15,
+        )
+        db.session.add(inventario)
+        db.session.flush()
 
-    for o_data in ofertas_base:
-        existente = Oferta.query.filter_by(
-            id_emergencia=o_data['emergencia'].id,
-            estado=o_data['estado'].value,
-        ).first()
-        if existente:
-            continue
-
+    oferta = Oferta.query.filter_by(
+        convocatoria_id=lote.id,
+        creada_por_ong_id=ong_id,
+    ).first()
+    if oferta is None:
         oferta = Oferta(
-            id_emergencia=o_data['emergencia'].id,
-            estado=o_data['estado'].value,
+            id_emergencia=emergencia.id,
+            convocatoria_id=lote.id,
+            creada_por_ong_id=ong_id,
+            estado=EstadoOfertaEnum.ACEPTADA,
             version_actual=1,
-            es_conjunta=o_data['es_conjunta'],
+            es_conjunta=False,
         )
         db.session.add(oferta)
-        db.session.flush()  # para obtener oferta.id antes del commit
+        db.session.flush()
 
+    oferta.id_emergencia = emergencia.id
+    oferta.convocatoria_id = lote.id
+    oferta.creada_por_ong_id = ong_id
+    oferta.estado = EstadoOfertaEnum.ACEPTADA
+    oferta.es_conjunta = False
+
+    version = VersionOferta.query.filter_by(
+        id_oferta=oferta.id,
+        numero_version=oferta.version_actual,
+    ).first()
+    if version is None:
         version = VersionOferta(
             id_oferta=oferta.id,
-            numero_version=1,
+            numero_version=oferta.version_actual,
             usuario_modificacion=ong_usuario.id,
-            observaciones=o_data['observaciones'],
-            estado_versiones=o_data['estado'].value,
+            observaciones='Seed: oferta validada para adjudicación municipal',
         )
         db.session.add(version)
-        db.session.flush()  # para obtener version.id
+        db.session.flush()
+    version.usuario_modificacion = ong_usuario.id
+    version.estado_versiones = EstadoOfertaEnum.ACEPTADA.value
+    version.observaciones = 'Seed: oferta validada para adjudicación municipal'
 
-        detalle = DetalleVersionOferta(
-            id_version=version.id,
-            id_ong=ong_profile.id,
-            id_recurso=o_data['recurso'].id,
-            cantidad=o_data['cantidad'],
+    detalle = next((
+        item for item in version.detalles
+        if item.id_ong == ong_id and item.id_recurso == recurso.id
+    ), None)
+    if detalle is None:
+        version.detalles.append(DetalleVersionOferta(
+            id_ong=ong_id,
+            id_recurso=recurso.id,
+            cantidad=min(10, inventario.cantidad_disponible),
             cantidad_adjudicada=0,
-        )
-        db.session.add(detalle)
+        ))
+    else:
+        detalle.cantidad = min(10, inventario.cantidad_disponible)
+        detalle.cantidad_adjudicada = 0
 
-        print(f"  [+] Oferta creada para {o_data['emergencia'].zona_afectada} - estado {o_data['estado'].value}")
+    for detalle_extra in list(version.detalles):
+        if detalle_extra.id_ong != ong_id or detalle_extra.id_recurso != recurso.id:
+            version.detalles.remove(detalle_extra)
+
+    participante = OfertaParticipante.query.filter_by(
+        oferta_id=oferta.id,
+        ong_id=ong_id,
+    ).first()
+    if participante is None:
+        db.session.add(OfertaParticipante(
+            oferta_id=oferta.id,
+            ong_id=ong_id,
+            estado='Aceptada',
+        ))
+    else:
+        participante.estado = 'Aceptada'
 
     db.session.commit()
-"""
+
 
 def seed_ccr_data():
     print('🌱 Seedeando escenarios CCR...')
