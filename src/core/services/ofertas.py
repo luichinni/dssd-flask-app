@@ -6,10 +6,54 @@ from src.core.models.version_oferta import VersionOferta
 from src.core.models.detalle_version_oferta import DetalleVersionOferta
 from src.core.models.inventario import InventarioONG
 from src.core.enums import EstadoOfertaEnum
+from src.core.models.emergencia import Emergencia
 
-def listar_ofertas():
+def listar_ofertas(id_ong):
     """Devuelve todas las ofertas."""
-    return Oferta.query.all()
+    ofertas = Oferta.query.all()
+    resultado = []
+
+    for oferta in ofertas:
+        version_actual = VersionOferta.query.filter_by(
+            id_oferta=oferta.id_oferta,
+            numero_version=oferta.version_actual
+        ).first()
+
+        if version_actual is None:
+            continue
+
+        participa_ong = any(detalle.id_ong == id_ong for detalle in version_actual.detalles)
+        if not participa_ong:
+            continue
+
+        emergencia = db.session.get(Emergencia, oferta.id_emergencia)
+        ongs_participantes = []
+
+        for detalle in version_actual.detalles:
+            if detalle.ong not in ongs_participantes:
+                ongs_participantes.append(detalle.ong)
+
+        recursos = []
+
+        for detalle in version_actual.detalles:
+            if detalle.recurso not in recursos:
+                recursos.append({
+                    'nombre': detalle.recurso.nombre,
+                    'cantidad': detalle.cantidad
+                })
+
+        resultado.append({
+            "id": oferta.id_oferta,
+            "id_oferta": oferta.id_oferta,
+            "nombre_emergencia": (emergencia.descripcion if emergencia else "Emergencia no encontrada"),
+            "version": oferta.version_actual,
+            "es_conjunta": oferta.es_conjunta,
+            "estado": oferta.estado,
+            "ongs_participantes": ongs_participantes,
+            "recursos": recursos
+            }),
+
+    return resultado
 
 def _validar_recursos(recursos, id_ong):
     """

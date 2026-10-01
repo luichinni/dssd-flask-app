@@ -318,7 +318,7 @@ def crear_oferta():
 @login_required
 @roles_required(RolEnum.ONG)
 def listado_ofertas():
-    lista = ofertas.listar_ofertas()
+    lista = ofertas.listar_ofertas(current_user.id)
 
     return render_template('ofertas/listado_ofertas.html', ofertas=lista, EstadoOfertaEnum=EstadoOfertaEnum)
 

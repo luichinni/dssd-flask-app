@@ -4,7 +4,7 @@
 <div>
     <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900">Listado de Ofertas</h1>
     <p class="mt-2 text-slate-600"> Aquí puede ver todas las ofertas creadas por usted o en las que participa. </p>
-
+    
     <table class="w-full">
         <thead>
             <tr>
@@ -44,6 +44,7 @@
 
                             <span class="px-2 py-1 rounded-full bg-slate-100 text-sm">
                                 {{ recurso.nombre }}
+                                {{ recurso.cantidad }} 
                             </span>
 
                         {% endfor %}
