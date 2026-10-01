@@ -52,6 +52,11 @@
                     <p class="text-xs text-slate-400">
                         Última actualización el {{ emergencia.updated_at.strftime('%d/%m/%Y %H:%M') }}
                     </p>
+                    {% if emergencia.bonita_case_id %}
+                        <p class="text-xs text-slate-600 mt-2">Caso Bonita #{{ emergencia.bonita_case_id }}</p>
+                    {% elif emergencia.bonita_estado in ['iniciando', 'no_confirmado'] %}
+                        <p class="text-xs text-amber-700 mt-2">Caso Bonita sin confirmar. Revisá el proceso antes de volver a registrar esta emergencia.</p>
+                    {% endif %}
                     <!-- será emergencias.detalle, emergencia_id = emergencia.id -->
                     <div class="flex justify-center mt-4">
                         <a href="{{ url_for('emergencias.show', emergencia_id=emergencia.id) }}"

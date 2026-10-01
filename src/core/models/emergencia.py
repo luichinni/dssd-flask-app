@@ -18,6 +18,9 @@ class Emergencia(db.Model):
     fecha_registro = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
+    bonita_case_id = db.Column(db.BigInteger, nullable=True, unique=True)
+    bonita_estado = db.Column(db.String(20), nullable=False, default="sin_iniciar", server_default="sin_iniciar")
+
     reportante_id = synonym('responsable_id')
     created_at = synonym('fecha_registro')
     responsable = db.relationship('Usuario', foreign_keys=[responsable_id], backref='emergencias_reportadas')

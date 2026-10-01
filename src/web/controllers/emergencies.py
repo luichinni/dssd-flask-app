@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from src.core.services.emergencias import listar_emergencias, crear_emergencia
 from src.web.decorators.roles_required import roles_required
 from src.core.enums import RolEnum, NivelGravedadEnum, TipoDesastreEnum
-from flask import request, redirect, url_for 
+from flask import request, redirect, url_for, flash
 from src.core.services.ofertas import (
     listar_ofertas_aceptadas,
     listar_ofertas_adjudicadas,
@@ -42,7 +42,7 @@ def create():
     if municipio_id is None:
         abort(400)
 
-    crear_emergencia(
+    emergencia = crear_emergencia(
         tipo_desastre=request.form['tipo_desastre'],
         nivel_gravedad=int(request.form['nivel_gravedad']),
         zona_afectada=request.form['zona_afectada'],
@@ -51,6 +51,18 @@ def create():
         municipio_id=int(municipio_id),
     )
 
+    if emergencia.bonita_case_id is not None:
+        flash(
+            f"Emergencia registrada. Caso #{emergencia.bonita_case_id} creado en Bonita.",
+            "success",
+        )
+    else:
+        flash(
+            f"La emergencia #{emergencia.id} quedó guardada, pero no se confirmó "
+            "la creación del caso en Bonita. Revisá los casos y el log antes de "
+            "volver a registrarla.",
+            "error",
+        )
     return redirect(url_for('emergencias.index'))
 
 @emergencies_bp.get('/<int:emergencia_id>')
