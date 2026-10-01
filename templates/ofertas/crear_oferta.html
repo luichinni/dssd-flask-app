@@ -18,60 +18,144 @@
             <p class="mt-1 text-sm text-slate-600">{{ convocatoria.emergencia.zona_afectada }}</p>
         </div>
 
-        <div>
-            <label class="mb-1.5 block text-sm font-semibold text-slate-800">Seleccione los recursos a ofrecer *</label>
-            <div class="space-y-3">
-                {% for recurso in inventario %}
-                <div class="recurso-card flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 p-4">
-                    <input
-                        type="checkbox"
-                        id="recurso_{{ recurso.id }}"
-                        name="id_recurso"
-                        value="{{ recurso.id }}"
-                        class="recurso-checkbox h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                        onchange="habilitarCantidad(this)">
-                    <label for="recurso_{{ recurso.id }}" class="min-w-0 flex-1 cursor-pointer">
-                        <span class="font-medium text-slate-900">{{ recurso.nombre }}</span>
-                        <span class="block text-sm text-slate-500">Disponible: {{ recurso.cantidad_disponible }}</span>
-                    </label>
-                    <div class="flex items-center gap-2">
-                        <label for="cantidad_{{ recurso.id }}" class="text-sm font-medium text-slate-700">Cantidad:</label>
-                        <input 
-                            type="number"
-                            id="cantidad_{{ recurso.id }}"
-                            name="cantidad_{{ recurso.id }}"
-                            min="1"
-                            max="{{ recurso.cantidad_disponible }}"
-                            disabled
-                            class="w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition disabled:cursor-not-allowed disabled:bg-slate-100"
-                            placeholder="0">
-                    </div>
-                </div>
-                {% endfor %}
+        <section class="space-y-4">
+            <div>
+                <h2 class="text-base font-semibold text-slate-900">Recursos de {{ ong_nombre }}</h2>
+                <p class="mt-1 text-sm text-slate-600">Solo podés asignar recursos de tu propio inventario.</p>
             </div>
-        </div>
+            <div id="inventario_propio" class="space-y-3"></div>
+        </section>
+
+        <section class="space-y-4">
+            <div>
+                <h2 class="text-base font-semibold text-slate-900">Invitar ONGs colaboradoras</h2>
+                <p class="mt-1 text-sm text-slate-600">Cada ONG invitada añadirá sus recursos desde su propia cuenta.</p>
+            </div>
+            <div class="flex flex-wrap items-end gap-3">
+                <div class="min-w-56 flex-1">
+                    <label for="colaboradora_id" class="mb-1.5 block text-sm font-semibold text-slate-800">Agregar ONG colaboradora</label>
+                    <select id="colaboradora_id" class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm">
+                        <option value="">Seleccionar ONG...</option>
+                        {% for ong in colaboradoras_data %}
+                            <option value="{{ ong.id }}">{{ ong.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="button" id="agregar_colaboradora" class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Agregar</button>
+            </div>
+            <div id="ongs_invitadas" class="space-y-2" aria-live="polite"></div>
+        </section>
 
         <div class="flex justify-end border-t border-slate-100 pt-4">
-            <button type="submit" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Crear Oferta</button>
+            <button type="submit" id="guardar_oferta" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                <span class="submit-label">Crear Oferta</span>
+            </button>
         </div>
     </form>
 </div>
 
 <script>
-function habilitarCantidad(checkbox) { 
-    const cantidadInput = document.getElementById( "cantidad_" + checkbox.value );
+const ongIdPropia = {{ ong_id|tojson }};
+const nombreOngPropia = {{ ong_nombre|tojson }};
+const inventarioPropio = {{ inventario_data|tojson }};
+const colaboradoras = {{ colaboradoras_data|tojson }};
+const contenedorInventario = document.getElementById('inventario_propio');
+const contenedorInvitadas = document.getElementById('ongs_invitadas');
+const selectorColaboradora = document.getElementById('colaboradora_id');
+const idsParticipantes = new Set();
 
-    if (checkbox.checked) { 
-        cantidadInput.disabled = false; 
-        cantidadInput.required = true;
-        cantidadInput.focus(); 
+function renderizarInventarioPropio() {
+    if (!inventarioPropio.length) {
+        const empty = document.createElement('p');
+        empty.className = 'rounded-lg border border-slate-200 p-4 text-sm text-slate-500';
+        empty.textContent = 'No hay recursos disponibles en tu inventario.';
+        contenedorInventario.append(empty);
     }
-    else { 
-        cantidadInput.disabled = true;
-        cantidadInput.required = false;
-        cantidadInput.value = "";
+    for (const recurso of inventarioPropio) {
+        const row = document.createElement('div');
+        row.className = 'flex flex-wrap items-center gap-4 rounded-lg border border-slate-100 p-3';
+        const check = document.createElement('input');
+        check.type = 'checkbox';
+        check.id = `recurso_${ongIdPropia}_${recurso.id}`;
+        check.name = `recurso_${ongIdPropia}`;
+        check.value = recurso.id;
+        check.className = 'h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500';
+        const label = document.createElement('label');
+        label.htmlFor = check.id;
+        label.className = 'min-w-0 flex-1 cursor-pointer';
+        const name = document.createElement('span');
+        name.className = 'font-medium text-slate-900';
+        name.textContent = recurso.nombre;
+        const available = document.createElement('span');
+        available.className = 'block text-sm text-slate-500';
+        available.textContent = `Disponible: ${recurso.cantidad_disponible}`;
+        label.append(name, available);
+
+        const quantityLabel = document.createElement('label');
+        quantityLabel.htmlFor = `cantidad_${ongIdPropia}_${recurso.id}`;
+        quantityLabel.className = 'text-sm font-medium text-slate-700';
+        quantityLabel.textContent = 'Cantidad:';
+        const quantity = document.createElement('input');
+        quantity.type = 'number';
+        quantity.id = `cantidad_${ongIdPropia}_${recurso.id}`;
+        quantity.name = quantity.id;
+        quantity.min = '1';
+        quantity.max = recurso.cantidad_disponible;
+        quantity.disabled = true;
+        quantity.className = 'w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100';
+
+        check.addEventListener('change', () => {
+            quantity.disabled = !check.checked;
+            quantity.required = check.checked;
+            if (!check.checked) quantity.value = '';
+        });
+        row.append(check, label, quantityLabel, quantity);
+        contenedorInventario.append(row);
     }
 }
+
+function agregarInvitacion(ong) {
+    idsParticipantes.add(String(ong.id));
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-4 py-3';
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'ong_colaboradora_id';
+    hidden.value = ong.id;
+    const label = document.createElement('span');
+    label.className = 'text-sm font-medium text-slate-800';
+    label.textContent = `${ong.nombre} (invitación pendiente)`;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'rounded-lg px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50';
+    remove.textContent = 'Quitar';
+    remove.addEventListener('click', () => {
+        idsParticipantes.delete(String(ong.id));
+        row.remove();
+    });
+    row.append(hidden, label, remove);
+    contenedorInvitadas.append(row);
+}
+
+renderizarInventarioPropio();
+
+document.getElementById('agregar_colaboradora').addEventListener('click', () => {
+    const ong = colaboradoras.find(item => String(item.id) === selectorColaboradora.value);
+    if (!ong || idsParticipantes.has(String(ong.id))) return;
+    agregarInvitacion(ong);
+    selectorColaboradora.value = '';
+});
+
+document.querySelector('form').addEventListener('submit', event => {
+    const button = document.getElementById('guardar_oferta');
+    if (button.disabled) {
+        event.preventDefault();
+        return;
+    }
+    button.disabled = true;
+    button.querySelector('.submit-label').textContent = 'Enviando...';
+    button.classList.add('cursor-not-allowed', 'opacity-60');
+});
 </script>
 
 {% endblock %}

@@ -34,7 +34,7 @@ def contar_no_leidas(usuario_id: int) -> int:
     """Cuenta las notificaciones no leídas."""
     return Notificacion.query.filter_by(usuario_id=usuario_id, leida=False).count()
 
-def crear_notificacion(usuario_id: int, titulo: str, mensaje: str, tipo=TipoNotificacionEnum.ADJUDICACION_LOTE, referencia_id=None):
+def crear_notificacion(usuario_id: int, titulo: str, mensaje: str, tipo=TipoNotificacionEnum.ADJUDICACION_LOTE, referencia_id=None, commit=True):
     """Crea una nueva notificación para un usuario."""
     notif = Notificacion(
         usuario_id=usuario_id,
@@ -45,5 +45,8 @@ def crear_notificacion(usuario_id: int, titulo: str, mensaje: str, tipo=TipoNoti
         leida=False,
     )
     db.session.add(notif)
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
     return notif

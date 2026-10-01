@@ -15,12 +15,65 @@ def _ong_id_actual():
         return None
 
 
+def _inventario_para_formulario(items):
+    return [
+        {
+            'id': item.id,
+            'id_recurso': item.id_recurso,
+            'nombre': item.nombre,
+            'cantidad_disponible': item.cantidad_disponible,
+        }
+        for item in items
+    ]
+
+
+def _recursos_desde_formulario(ong_id):
+    try:
+        recursos = []
+        for inventario_id in request.form.getlist(f'recurso_{ong_id}'):
+            inventario_id = int(inventario_id)
+            cantidad = int(request.form.get(f'cantidad_{ong_id}_{inventario_id}', '0'))
+            recursos.append({'id_recurso': inventario_id, 'cantidad': cantidad})
+        return recursos
+    except (TypeError, ValueError) as error:
+        raise ValueError('La selección de recursos o cantidades no es válida.') from error
+
+
+def _colaboradoras_desde_formulario(ong_id):
+    try:
+        ids = [int(value) for value in request.form.getlist('ong_colaboradora_id')]
+    except (TypeError, ValueError) as error:
+        raise ValueError('La selección de ONGs colaboradoras no es válida.') from error
+    if ong_id in ids or len(ids) != len(set(ids)):
+        raise ValueError('La lista de colaboradoras contiene IDs inválidos o duplicados.')
+    return ids
+
+
+def _colaboradoras_para_formulario(ong_id):
+    return [
+        {
+            'id': item['ong'].id,
+            'nombre': item['ong'].nombre,
+        }
+        for item in ofertas.listar_ongs_colaboradoras(ong_id)
+    ]
+
+
 @ong_bp.get('/convocatorias')
 @login_required
 @roles_required(RolEnum.ONG)
 def convocatorias_activas():
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
     convocatorias = lotes.listar_convocatorias_activas()
-    return render_template('ong/convocatorias.html', convocatorias=convocatorias)
+    convocatorias_postuladas = ofertas.convocatorias_postuladas(ong_id)
+    return render_template(
+        'ong/convocatorias.html',
+        convocatorias=convocatorias,
+        convocatorias_postuladas=convocatorias_postuladas,
+        invitaciones_pendientes=ofertas.invitaciones_pendientes_por_convocatoria(ong_id),
+    )
 
 
 # ==============================================================================
@@ -270,51 +323,15 @@ def crear_oferta():
         abort(404)
 
     if request.method == 'POST':
-        id_emergencia = convocatoria.emergencia_id
-
-        # Recursos elegidos
-        ids_recursos = request.form.getlist(
-            'id_recurso'
-        )
-
-        recursos = []
-
-        for id_recurso in ids_recursos:
-
-            try:
-                id_recurso = int(id_recurso)
-
-                cantidad = int(
-                    request.form.get(
-                        f'cantidad_{id_recurso}',
-                        '0'
-                    )
-                )
-
-            except (TypeError, ValueError):
-
-                flash(
-                    'La cantidad de los recursos debe ser válida.',
-                    'error'
-                )
-
-                return redirect(
-                    url_for('ong.crear_oferta', convocatoria_id=convocatoria.id)
-                )
-
-            recursos.append({
-                'id_recurso': id_recurso,
-                'cantidad': cantidad
-            })
-
-        # Crear oferta
         try:
-
+            recursos = _recursos_desde_formulario(ong_id)
+            colaboradoras_ids = _colaboradoras_desde_formulario(ong_id)
             oferta = ofertas.crear_oferta(
-                id_emergencia=id_emergencia,
+                convocatoria_id=convocatoria.id,
                 recursos=recursos,
                 ong_id=ong_id,
                 usuario_id=current_user.id,
+                colaboradoras_ids=colaboradoras_ids,
             )
 
             flash(
@@ -326,9 +343,8 @@ def crear_oferta():
                 url_for('ong.listado_ofertas')
             )
 
-        except ValueError as e:
-
-            flash(str(e), 'error')
+        except ValueError as error:
+            flash(str(error), 'error')
 
             return redirect(
                 url_for('ong.crear_oferta', convocatoria_id=convocatoria.id)
@@ -338,7 +354,11 @@ def crear_oferta():
 
     return render_template(
         'ofertas/crear_oferta.html',
-        inventario=inventario_ong,
+        inventario_data=_inventario_para_formulario(inventario_ong),
+        colaboradoras_data=_colaboradoras_para_formulario(ong_id),
+        participantes_iniciales=[],
+        ong_id=ong_id,
+        ong_nombre=(current_user.datos_adicionales or {}).get('organizacion', current_user.nombre),
         convocatoria=convocatoria,
     )
 
@@ -363,12 +383,9 @@ def modificar_oferta(id_oferta):
 
     # Obtener oferta y verificar que la ONG participe
     try:
-
-        oferta, version_actual = (
-            ofertas.obtener_oferta_para_modificar(
-                id_oferta=id_oferta,
-                id_ong=ong_id
-            )
+        oferta, version_actual, participacion = ofertas.obtener_oferta_para_modificar(
+            id_oferta=id_oferta,
+            id_ong=ong_id,
         )
 
     except ValueError as e:
@@ -380,54 +397,15 @@ def modificar_oferta(id_oferta):
         )
 
     if request.method == 'POST':
-
-        # Recursos elegidos
-        ids_recursos = request.form.getlist(
-            'id_recurso'
-        )
-
-        recursos = []
-
-        for id_recurso in ids_recursos:
-
-            try:
-
-                id_recurso = int(id_recurso)
-
-                cantidad = int(
-                    request.form.get(
-                        f'cantidad_{id_recurso}',
-                        '0'
-                    )
-                )
-
-            except (TypeError, ValueError):
-
-                flash(
-                    'La cantidad de los recursos debe ser válida.',
-                    'error'
-                )
-
-                return redirect(
-                    url_for(
-                        'ong.modificar_oferta',
-                        id_oferta=id_oferta
-                    )
-                )
-
-            recursos.append({
-                'id_recurso': id_recurso,
-                'cantidad': cantidad
-            })
-
-        # Modificar oferta
         try:
-
+            recursos = _recursos_desde_formulario(ong_id)
+            colaboradoras_ids = _colaboradoras_desde_formulario(ong_id) if oferta.creada_por_ong_id == ong_id else []
             oferta = ofertas.modificar_oferta(
                 id_oferta=id_oferta,
                 recursos=recursos,
                 ong_id=ong_id,
                 usuario_id=current_user.id,
+                colaboradoras_ids=colaboradoras_ids,
             )
 
             flash(
@@ -439,9 +417,8 @@ def modificar_oferta(id_oferta):
                 url_for('ong.listado_ofertas')
             )
 
-        except ValueError as e:
-
-            flash(str(e), 'error')
+        except ValueError as error:
+            flash(str(error), 'error')
 
             return redirect(
                 url_for(
@@ -451,16 +428,30 @@ def modificar_oferta(id_oferta):
             )
 
     #Lo que queda con GET
-    lista_emergencias = (
-        emergencias.listar_todas_las_emergencias()
-    )
-
     inventario_ong = inventario.listar_inventario(ong_id)
+    detalles_propios = {
+        str(item.id): detalle.cantidad
+        for detalle in version_actual.detalles
+        if detalle.id_ong == ong_id
+        for item in inventario_ong
+        if item.id_recurso == detalle.id_recurso
+    }
+    colaboradoras_actuales = [
+        {'id': item.ong_id, 'nombre': item.ong.nombre, 'estado': item.estado}
+        for item in oferta.participaciones
+        if item.ong_id != ong_id
+    ]
+    es_creadora = oferta.creada_por_ong_id == ong_id
 
     return render_template(
         'ofertas/modificar_oferta.html',
         oferta=oferta,
         version_actual=version_actual,
-        emergencias=lista_emergencias,
-        inventario=inventario_ong
+        inventario_data=_inventario_para_formulario(inventario_ong),
+        colaboradoras_data=_colaboradoras_para_formulario(ong_id) if es_creadora else [],
+        colaboradoras_actuales=colaboradoras_actuales,
+        cantidades_propias=detalles_propios,
+        es_creadora=es_creadora,
+        ong_id=ong_id,
+        ong_nombre=(current_user.datos_adicionales or {}).get('organizacion', current_user.nombre),
     )

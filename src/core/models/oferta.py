@@ -11,6 +11,8 @@ class Oferta(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     id_oferta = synonym('id')
     id_emergencia = db.Column(db.Integer, db.ForeignKey('emergencias.id'), nullable=False, index=True)
+    convocatoria_id = db.Column(db.Integer, db.ForeignKey('lotes_necesidades.id'), nullable=True, index=True)
+    creada_por_ong_id = db.Column(db.Integer, db.ForeignKey('ongs.id'), nullable=True, index=True)
 
     fecha_creacion = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     estado = db.Column(
@@ -24,6 +26,8 @@ class Oferta(db.Model):
 
     versiones = db.relationship('VersionOferta', back_populates='oferta', cascade='all, delete-orphan', order_by='VersionOferta.numero_version')
     emergencia = db.relationship('Emergencia', backref='ofertas')
+    convocatoria = db.relationship('LoteNecesidades', backref='ofertas')
+    participaciones = db.relationship('OfertaParticipante', back_populates='oferta', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Oferta {self.id_oferta} - Estado: {self.estado}>'

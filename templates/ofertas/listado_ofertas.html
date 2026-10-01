@@ -1,65 +1,102 @@
-{%extends "layout.html"%}
-{% block title %}Listado de Ofertas - Sistema de Emergencias Municipales{% endblock %}
+{% extends "layout.html" %}
+
+{% block title %}Mis Postulaciones - Sistema de Emergencias Municipales{% endblock %}
+
 {% block content %}
-<div>
-    <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900">Listado de Ofertas</h1>
-    <p class="mt-2 text-slate-600"> Aquí puede ver todas las ofertas creadas por usted o en las que participa. </p>
-    
-    <table class="w-full">
-        <thead>
-            <tr>
-                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">ID Oferta</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Nombre Emergencia</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Versión</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Estado</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">¿Es conjunta?</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Recursos</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-slate-900">Otros</th>
-            </tr>
-        </thead>
-        <tbody>
+<div class="mx-auto max-w-5xl space-y-6">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold uppercase text-indigo-600">ONG</p>
+            <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-900">Mis Postulaciones</h1>
+            <p class="mt-2 text-sm text-slate-600">Ofertas propias y colaborativas en las que participa tu organización.</p>
+        </div>
+        <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+            {{ ofertas|length }} {{ 'oferta' if ofertas|length == 1 else 'ofertas' }}
+        </span>
+    </header>
+
+    {% if ofertas %}
+        <div class="divide-y divide-slate-200 border-y border-slate-200">
             {% for oferta in ofertas %}
-            <tr>
-                <td>{{ oferta.id }}</td>
-                <td>{{ oferta.nombre_emergencia }}</td>
-                <td>{{ oferta.version }}</td>
-                <td>{{ oferta.estado.value }}</td>
-                <td>
-                    {% if oferta.es_conjunta %}
-                        <!--Aparte de mostrar que sí, igual muestra el nombre de todas las ongs participantes -->
-                        {% for ong in oferta.ongs_participantes %}
-                            <span class="px-2 py-1 rounded-full bg-slate-100 text-sm">
-                                {{ ong.nombre }}
-                            </span>
-                        {% endfor %}
-                    {% else %}
-                        No
-                    {% endif %}
-                </td>
-                <!--Listado de recursos-->
-                <td>
-                    <div class="flex flex-wrap gap-2">
+                <article class="bg-white py-5 first:pt-5 last:pb-5">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div class="min-w-0 space-y-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-base font-semibold text-slate-900">Oferta #{{ oferta.id_oferta }}</h2>
+                                {% set estado_oferta = oferta.estado.value if oferta.estado.value is defined else oferta.estado %}
+                                {% if estado_oferta == 'Pendiente' %}
+                                    <span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold uppercase text-amber-800">{{ estado_oferta }}</span>
+                                {% elif estado_oferta == 'Aceptada' %}
+                                    <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold uppercase text-emerald-800">{{ estado_oferta }}</span>
+                                {% elif estado_oferta == 'Rechazada' %}
+                                    <span class="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-semibold uppercase text-red-800">{{ estado_oferta }}</span>
+                                {% else %}
+                                    <span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold uppercase text-blue-800">{{ estado_oferta }}</span>
+                                {% endif %}
+                                {% if oferta.estado_participacion == 'Pendiente' %}
+                                    <span class="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold uppercase text-amber-800">Invitación pendiente</span>
+                                {% elif oferta.estado_participacion == 'Postulado' %}
+                                    <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold uppercase text-emerald-800">Postulado</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-sm text-slate-600">{{ oferta.nombre_emergencia }}</p>
+                            <p class="text-xs text-slate-500">Versión {{ oferta.version }}</p>
+                        </div>
 
-                        {% for recurso in oferta.recursos %}
-
-                            <span class="px-2 py-1 rounded-full bg-slate-100 text-sm">
-                                {{ recurso.nombre }}
-                                {{ recurso.cantidad }} 
-                            </span>
-
-                        {% endfor %}
-
+                        <div class="flex shrink-0 items-center gap-2">
+                            {% if oferta.estado == EstadoOfertaEnum.PENDIENTE %}
+                                <a href="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id_oferta) }}"
+                                   class="inline-flex items-center rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700">
+                                    {{ 'Aportar recursos' if oferta.estado_participacion == 'Pendiente' else 'Editar aporte' }}
+                                </a>
+                            {% endif %}
+                        </div>
                     </div>
-                </td>
-                <!--Otros-->
-                <td>
-                    {% if oferta.estado == EstadoOfertaEnum.PENDIENTE %}
-                        <a href="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id_oferta) }}" class="text-blue-500 hover:underline">Modificar aporte</a>
-                    {%endif%}
-                </td>
-            </tr>
+
+                    {% if oferta.ongs_participantes %}
+                        <div class="mt-4">
+                            <h3 class="text-xs font-semibold uppercase text-slate-500">ONGs participantes</h3>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                {% for ong in oferta.ongs_participantes %}
+                                    <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">{{ ong.nombre }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if oferta.recursos %}
+                        <div class="mt-4 overflow-hidden rounded-lg border border-slate-200">
+                            <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase text-slate-500">
+                                <span>Recurso</span>
+                                <span>ONG aportante</span>
+                                <span class="text-right">Cantidad</span>
+                            </div>
+                            <ul class="divide-y divide-slate-100">
+                                {% for recurso in oferta.recursos %}
+                                    <li class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 px-3 py-2.5 text-sm">
+                                        <span class="truncate font-medium text-slate-800">{{ recurso.nombre }}</span>
+                                        <span class="truncate text-slate-600">{{ recurso.ong }}</span>
+                                        <span class="text-right tabular-nums text-slate-700">{{ recurso.cantidad }}</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% else %}
+                        <p class="mt-4 rounded-lg border border-dashed border-slate-300 px-3 py-3 text-sm text-slate-500">
+                            Todavía no se cargaron recursos para esta oferta.
+                        </p>
+                    {% endif %}
+                </article>
             {% endfor %}
-        </tbody>
-    </table>
+        </div>
+    {% else %}
+        <div class="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+            <h2 class="text-base font-semibold text-slate-900">Todavía no tenés postulaciones</h2>
+            <p class="mt-1 text-sm text-slate-600">Las convocatorias en las que participes aparecerán aquí.</p>
+            <a href="{{ url_for('ong.convocatorias_activas') }}" class="mt-4 inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                Ver convocatorias
+            </a>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}

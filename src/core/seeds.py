@@ -13,6 +13,7 @@ from src.core.models import (
     Oferta,
     VersionOferta,
     DetalleVersionOferta,
+    OfertaParticipante,
 )
 from src.core.enums import RolEnum, TipoRecursoEnum, TipoNotificacionEnum, EstadoActividadEnum, TipoDesastreEnum, EstadoOfertaEnum
 from src.core.database import db
@@ -27,6 +28,7 @@ def seed(app):
         seed_ong_data()
         seed_emergencies_data()
         seed_ccr_data()
+        seed_oferta_colaborativa_data()
         print("🌱 Finalización de la carga de datos iniciales (Seeding)!")
 
 def seed_users():
@@ -36,6 +38,14 @@ def seed_users():
     if not ong:
         ong = ONG(nombre='Red de Apoyo Comunitario', descripcion='12345/2020')
         db.session.add(ong)
+
+    ong_colaboradora = ONG.query.filter_by(nombre='Brigada Humanitaria Federal').first()
+    if not ong_colaboradora:
+        ong_colaboradora = ONG(
+            nombre='Brigada Humanitaria Federal',
+            descripcion='ONG colaboradora de prueba',
+        )
+        db.session.add(ong_colaboradora)
 
     municipio = Municipio.query.filter_by(nombre='Sin asignar', provincia='Sin asignar').first()
     if not municipio:
@@ -64,6 +74,13 @@ def seed_users():
             'password': 'Ong2026!',
             'rol': RolEnum.ONG,
             'datos_adicionales': {'ong_id': ong.id},
+        },
+        {
+            'nombre': 'Representante ONG Colaboradora',
+            'email': 'colaboradora@ayuda.org',
+            'password': 'Colaboradora2026!',
+            'rol': RolEnum.ONG,
+            'datos_adicionales': {'ong_id': ong_colaboradora.id},
         },
         {
             'nombre': 'Auditor General',
@@ -420,6 +437,8 @@ def seed_ccr_data():
     oferta.estado = EstadoOfertaEnum.PENDIENTE
     oferta.version_actual = 1
     oferta.es_conjunta = False
+    oferta.convocatoria_id = lote_decision.id
+    oferta.creada_por_ong_id = ong.id
 
     version = VersionOferta.query.filter_by(id_oferta=oferta.id_oferta, numero_version=1).first()
     if version is None:
@@ -432,13 +451,33 @@ def seed_ccr_data():
     version.usuario_modificacion = ong_usuario.id
     version.estado_versiones = 'pendiente'
     version.observaciones = 'Seed CCR: convocatoria vencida bajo min_r'
-    version.detalles.clear()
-    version.detalles.append(DetalleVersionOferta(
-        ong=ong,
-        recurso=recurso_decision,
-        cantidad=5,
-        cantidad_adjudicada=0,
-    ))
+    detalle_seed = next((
+        detalle for detalle in version.detalles
+        if detalle.id_ong == ong.id and detalle.id_recurso == recurso_decision.id
+    ), None)
+    if detalle_seed is None:
+        version.detalles.append(DetalleVersionOferta(
+            ong=ong,
+            recurso=recurso_decision,
+            cantidad=5,
+            cantidad_adjudicada=0,
+        ))
+    else:
+        detalle_seed.cantidad = 5
+        detalle_seed.cantidad_adjudicada = 0
+    participante = OfertaParticipante.query.filter_by(
+        oferta_id=oferta.id,
+        ong_id=ong.id,
+    ).first()
+    if participante is None:
+        participante = OfertaParticipante(
+            oferta_id=oferta.id,
+            ong_id=ong.id,
+            estado='Aceptada',
+        )
+        db.session.add(participante)
+    else:
+        participante.estado = 'Aceptada'
 
     lote_publicado, emergencia_publicada, recurso_publicado, min_publicado = lotes[0]
     titulo = f'Convocatoria CCR publicada #{lote_publicado.id}'
@@ -461,6 +500,174 @@ def seed_ccr_data():
         notificacion.mensaje = mensaje
         notificacion.tipo = TipoNotificacionEnum.CONVOCATORIA
         notificacion.referencia_id = lote_publicado.id
+        notificacion.leida = False
+
+    db.session.commit()
+
+
+def seed_oferta_colaborativa_data():
+    """Crea datos repetibles para probar una oferta compartida entre dos ONGs."""
+    ong_usuario = Usuario.query.filter_by(email='ong@ayuda.org').first()
+    colaboradora_usuario = Usuario.query.filter_by(email='colaboradora@ayuda.org').first()
+    emergencia = Emergencia.query.filter_by(zona_afectada='CCR - Convocatoria publicada').first()
+    if not ong_usuario or not colaboradora_usuario or not emergencia:
+        print('  [!] Faltan usuarios ONG o emergencia publicada. Se omite la oferta colaborativa.')
+        return
+
+    ong_id = int((ong_usuario.datos_adicionales or {}).get('ong_id', 0))
+    colaboradora_id = int((colaboradora_usuario.datos_adicionales or {}).get('ong_id', 0))
+    ong = db.session.get(ONG, ong_id)
+    ong_colaboradora = db.session.get(ONG, colaboradora_id)
+    if not ong or not ong_colaboradora:
+        print('  [!] Faltan perfiles de ONG. Se omite la oferta colaborativa.')
+        return
+
+    recurso_catalogo_ong = RecursoCatalogo.query.filter_by(
+        nombre='Paramédicos de Emergencia'
+    ).first()
+    if recurso_catalogo_ong is None:
+        recurso_catalogo_ong = RecursoCatalogo(
+            nombre='Paramédicos de Emergencia',
+            tipo_recursos=TipoRecursoEnum.PERSONAL,
+            unidad_medida='Personas',
+            descripcion='Personal médico de respuesta para escenarios colaborativos.',
+        )
+        db.session.add(recurso_catalogo_ong)
+
+    recurso_catalogo_colaboradora = RecursoCatalogo.query.filter_by(
+        nombre='Kits de Higiene Comunitarios'
+    ).first()
+    if recurso_catalogo_colaboradora is None:
+        recurso_catalogo_colaboradora = RecursoCatalogo(
+            nombre='Kits de Higiene Comunitarios',
+            tipo_recursos=TipoRecursoEnum.INSUMO,
+            unidad_medida='Kits',
+            descripcion='Kits de higiene para familias afectadas.',
+        )
+        db.session.add(recurso_catalogo_colaboradora)
+    db.session.flush()
+
+    inventario_ong = InventarioONG.query.filter_by(
+        ong_id=ong.id,
+        id_recurso=recurso_catalogo_ong.id,
+    ).first()
+    if inventario_ong is None:
+        inventario_ong = InventarioONG(
+            ong_id=ong.id,
+            recurso=recurso_catalogo_ong,
+            cantidad_total=15,
+            cantidad_disponible=15,
+        )
+        db.session.add(inventario_ong)
+
+    inventario_colaboradora = InventarioONG.query.filter_by(
+        ong_id=ong_colaboradora.id,
+        id_recurso=recurso_catalogo_colaboradora.id,
+    ).first()
+    if inventario_colaboradora is None:
+        inventario_colaboradora = InventarioONG(
+            ong_id=ong_colaboradora.id,
+            recurso=recurso_catalogo_colaboradora,
+            cantidad_total=100,
+            cantidad_disponible=100,
+        )
+        db.session.add(inventario_colaboradora)
+    db.session.flush()
+
+    observacion_seed = 'Seed: oferta colaborativa entre ONGs'
+    lote_publicado = LoteNecesidades.query.filter_by(emergencia_id=emergencia.id).first()
+    if lote_publicado is None:
+        print('  [!] Falta la convocatoria publicada. Se omite la oferta colaborativa.')
+        return
+
+    version = VersionOferta.query.filter_by(observaciones=observacion_seed).first()
+    if version is None:
+        oferta = Oferta(
+            id_emergencia=emergencia.id,
+            convocatoria_id=lote_publicado.id,
+            creada_por_ong_id=ong.id,
+            estado=EstadoOfertaEnum.PENDIENTE,
+            version_actual=1,
+            es_conjunta=True,
+        )
+        db.session.add(oferta)
+        db.session.flush()
+        version = VersionOferta(
+            id_oferta=oferta.id,
+            numero_version=1,
+            usuario_modificacion=ong_usuario.id,
+            estado_version=EstadoOfertaEnum.PENDIENTE.value,
+            observaciones=observacion_seed,
+        )
+        db.session.add(version)
+        db.session.flush()
+    else:
+        oferta = version.oferta
+        oferta.id_emergencia = emergencia.id
+        oferta.convocatoria_id = lote_publicado.id
+        oferta.creada_por_ong_id = ong.id
+        oferta.estado = EstadoOfertaEnum.PENDIENTE
+        oferta.es_conjunta = True
+        oferta.version_actual = version.numero_version
+
+    asignaciones_seed = (
+        (ong.id, inventario_ong.id_recurso, 5),
+        (ong_colaboradora.id, inventario_colaboradora.id_recurso, 20),
+    )
+    asignaciones_ids = {(participante_id, recurso_id) for participante_id, recurso_id, _ in asignaciones_seed}
+    for participante_id, recurso_id, cantidad in asignaciones_seed:
+        detalle = next((
+            item for item in version.detalles
+            if item.id_ong == participante_id and item.id_recurso == recurso_id
+        ), None)
+        if detalle is None:
+            version.detalles.append(DetalleVersionOferta(
+                id_ong=participante_id,
+                id_recurso=recurso_id,
+                cantidad=cantidad,
+                cantidad_adjudicada=0,
+            ))
+        else:
+            detalle.cantidad = cantidad
+            detalle.cantidad_adjudicada = 0
+    for detalle in list(version.detalles):
+        if (detalle.id_ong, detalle.id_recurso) not in asignaciones_ids:
+            version.detalles.remove(detalle)
+
+    for participante_id in (ong.id, ong_colaboradora.id):
+        participante = OfertaParticipante.query.filter_by(
+            oferta_id=oferta.id,
+            ong_id=participante_id,
+        ).first()
+        estado_participante = 'Aceptada' if participante_id == ong.id else 'Pendiente'
+        if participante is None:
+            db.session.add(OfertaParticipante(
+                oferta_id=oferta.id,
+                ong_id=participante_id,
+                estado=estado_participante,
+            ))
+        else:
+            participante.estado = estado_participante
+
+    titulo = f'Participación en oferta #{oferta.id}'
+    notificacion = Notificacion.query.filter_by(
+        usuario_id=colaboradora_usuario.id,
+        titulo=titulo,
+    ).first()
+    mensaje = f'Tu ONG fue incluida como participante en la oferta colaborativa #{oferta.id}.'
+    if notificacion is None:
+        notificacion = Notificacion(
+            usuario_id=colaboradora_usuario.id,
+            titulo=titulo,
+            mensaje=mensaje,
+            tipo=TipoNotificacionEnum.SISTEMA,
+            referencia_id=oferta.id,
+            leida=False,
+        )
+        db.session.add(notificacion)
+    else:
+        notificacion.mensaje = mensaje
+        notificacion.referencia_id = oferta.id
         notificacion.leida = False
 
     db.session.commit()

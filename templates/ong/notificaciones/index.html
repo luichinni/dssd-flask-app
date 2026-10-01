@@ -97,6 +97,13 @@
                             {{ notif.mensaje }}
                         </div>
 
+                        {% if notif.titulo.startswith('Participación en oferta #') and notif.referencia_id %}
+                            <a href="{{ url_for('ong.modificar_oferta', id_oferta=notif.referencia_id) }}"
+                               class="mt-3 inline-flex rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                                Revisar oferta y aportar recursos
+                            </a>
+                        {% endif %}
+
                         {% if notif.referencia_id %}
                         <div class="mt-3">
                             <span class="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-1 rounded">Ref ID Lote / Operación: #{{ notif.referencia_id }}</span>
