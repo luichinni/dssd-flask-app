@@ -91,7 +91,8 @@
 
                     {% if act.recursos_utilizados %}
                     <div class="text-xs text-slate-500">
-                        <strong class="text-slate-700">Recursos desplegados:</strong> {{ act.recursos_utilizados }}
+                        <strong class="text-slate-700">Recursos desplegados:</strong>
+                        {{ act.recursos_utilizados.get('descripcion', act.recursos_utilizados) if act.recursos_utilizados is mapping else act.recursos_utilizados }}
                     </div>
                     {% endif %}
 

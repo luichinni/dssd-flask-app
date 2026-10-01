@@ -60,6 +60,25 @@ def listar_lotes():
     )
 
 
+def listar_convocatorias_activas():
+    ahora = func.now()
+    return (
+        LoteNecesidades.query
+        .options(
+            joinedload(LoteNecesidades.emergencia),
+            selectinload(LoteNecesidades.detalles).joinedload(LoteDetalle.recurso),
+        )
+        .filter(
+            LoteNecesidades.fecha_inicio_ofertas.isnot(None),
+            LoteNecesidades.fecha_inicio_ofertas <= ahora,
+            LoteNecesidades.fecha_cierre_ofertas > ahora,
+            LoteNecesidades.detalles.any(),
+        )
+        .order_by(LoteNecesidades.fecha_cierre_ofertas.asc())
+        .all()
+    )
+
+
 def obtener_lote(lote_id: int):
     return (
         LoteNecesidades.query

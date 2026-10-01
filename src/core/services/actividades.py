@@ -1,6 +1,7 @@
 from datetime import datetime
 from src.core.database import db
 from src.core.models.actividad import ActividadONG
+from src.core.models.lote_necesidades import LoteNecesidades
 from src.core.enums.estado_actividad_enum import EstadoActividadEnum
 
 def listar_actividades(ong_id: int, estado: EstadoActividadEnum = None):
@@ -16,14 +17,29 @@ def obtener_actividad(actividad_id: int, ong_id: int):
 
 def crear_actividad(ong_id: int, data: dict):
     """Crea una nueva actividad operativa para la ONG."""
+    lote_referencia = data.get('lote_referencia')
+    if lote_referencia in ('', None):
+        lote_referencia = None
+    else:
+        try:
+            lote_referencia = int(lote_referencia)
+        except (TypeError, ValueError) as error:
+            raise ValueError('La referencia del lote debe ser un ID válido.') from error
+        if db.session.get(LoteNecesidades, lote_referencia) is None:
+            raise ValueError('El lote seleccionado no existe.')
+
+    recursos_utilizados = data.get('recursos_utilizados')
+    if isinstance(recursos_utilizados, str):
+        recursos_utilizados = {'descripcion': recursos_utilizados.strip()} if recursos_utilizados.strip() else None
+
     actividad = ActividadONG(
         ong_id=ong_id,
         titulo=data.get('titulo', '').strip(),
         descripcion=data.get('descripcion', '').strip(),
-        lote_referencia=data.get('lote_referencia', '').strip(),
+        lote_referencia=lote_referencia,
         estado=EstadoActividadEnum.EN_EJECUCION,
         fecha_inicio=datetime.utcnow(),
-        recursos_utilizados=data.get('recursos_utilizados', '').strip(),
+        recursos_utilizados=recursos_utilizados,
     )
     db.session.add(actividad)
     db.session.commit()
@@ -39,7 +55,7 @@ def finalizar_actividad(actividad_id: int, ong_id: int, informe_cierre: str, rec
     actividad.fecha_finalizacion = datetime.utcnow()
     actividad.informe_cierre = informe_cierre.strip()
     if recursos_utilizados:
-        actividad.recursos_utilizados = recursos_utilizados.strip()
+        actividad.recursos_utilizados = {'descripcion': recursos_utilizados.strip()}
 
     db.session.commit()
     return actividad
