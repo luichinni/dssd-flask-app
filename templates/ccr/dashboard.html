@@ -1,0 +1,91 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard CCR - Gestión de Emergencias{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold uppercase text-indigo-700">Centro Coordinador</p>
+            <h1 class="mt-1 text-2xl font-bold text-slate-900">Dashboard CCR</h1>
+        </div>
+        <a href="{{ url_for('ccr.lotes') }}" class="rounded-md bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800">
+            Gestionar lotes
+        </a>
+    </header>
+
+    <section aria-labelledby="emergencias-heading">
+        <h2 id="emergencias-heading" class="text-lg font-semibold text-slate-900">Emergencias</h2>
+        {% if emergencias %}
+            <div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                    <thead class="bg-slate-50 text-xs uppercase text-slate-600">
+                        <tr>
+                            <th scope="col" class="px-4 py-3">ID</th>
+                            <th scope="col" class="px-4 py-3">Zona</th>
+                            <th scope="col" class="px-4 py-3">Desastre</th>
+                            <th scope="col" class="px-4 py-3">Registrada</th>
+                            <th scope="col" class="px-4 py-3">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for emergencia in emergencias %}
+                            <tr>
+                                <td class="px-4 py-3 font-medium text-slate-900">#{{ emergencia.id }}</td>
+                                <td class="px-4 py-3">{{ emergencia.zona_afectada }}</td>
+                                <td class="px-4 py-3">{{ emergencia.tipo_desastre.value }}</td>
+                                <td class="whitespace-nowrap px-4 py-3 text-slate-600">{{ emergencia.fecha_registro.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td class="px-4 py-3">
+                                    {% if estados_emergencias[emergencia.id] == 'activa' %}
+                                        <span class="rounded bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">Activa</span>
+                                    {% else %}
+                                        <span class="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">Inactiva</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="mt-3 rounded-lg border border-dashed border-slate-300 p-5 text-sm text-slate-600">No hay emergencias registradas.</p>
+        {% endif %}
+    </section>
+
+    <section aria-labelledby="lotes-heading">
+        <h2 id="lotes-heading" class="text-lg font-semibold text-slate-900">Lotes vigentes</h2>
+        {% if lotes_vigentes %}
+            <div class="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                    <thead class="bg-slate-50 text-xs uppercase text-slate-600">
+                        <tr>
+                            <th scope="col" class="px-4 py-3">Lote</th>
+                            <th scope="col" class="px-4 py-3">Emergencia</th>
+                            <th scope="col" class="px-4 py-3">Recurso</th>
+                            <th scope="col" class="px-4 py-3">Cantidad necesaria</th>
+                            <th scope="col" class="px-4 py-3">min_r</th>
+                            <th scope="col" class="px-4 py-3">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for lote in lotes_vigentes %}
+                            {% for detalle in lote.detalles %}
+                                <tr>
+                                    <td class="px-4 py-3 font-medium text-slate-900">#{{ lote.id }}</td>
+                                    <td class="px-4 py-3">#{{ lote.emergencia.id }} · {{ lote.emergencia.zona_afectada }}</td>
+                                    <td class="px-4 py-3">{{ detalle.recurso.nombre }} · {{ detalle.recurso.unidad_medida }}</td>
+                                    <td class="px-4 py-3">{{ detalle.cantidad_necesaria }}</td>
+                                    <td class="px-4 py-3">{{ detalle.cantidad_minima }}</td>
+                                    <td class="px-4 py-3"><span class="rounded bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">Publicado</span></td>
+                                </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="mt-3 rounded-lg border border-dashed border-slate-300 p-5 text-sm text-slate-600">No hay lotes vigentes.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

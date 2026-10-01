@@ -1,16 +1,21 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
+from sqlalchemy.orm import synonym
+
 from src.core.database import db
 
 class VersionOferta(db.Model):
     __tablename__ = 'version_ofertas'
 
-    id_version = db.Column(db.Integer, primary_key=True)
-    id_oferta = db.Column(db.Integer, db.ForeignKey('ofertas.id_oferta'), nullable=False)
+    id = db.Column(db.Integer, primary_key=True)
+    id_version = synonym('id')
+    id_oferta = db.Column(db.Integer, db.ForeignKey('ofertas.id'), nullable=False)
     numero_version = db.Column(db.Integer, nullable=False)
-    fecha_version = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    usuario_modificacion = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+    fecha_version = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    usuario_modificacion = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     observaciones = db.Column(db.Text, nullable=True)
-    estado_version = db.Column(db.String(30), nullable=False, default='pendiente')
+    estado_versiones = db.Column(db.String(30), nullable=True)
+    estado_version = synonym('estado_versiones')
 
     oferta = db.relationship('Oferta', back_populates='versiones')
 

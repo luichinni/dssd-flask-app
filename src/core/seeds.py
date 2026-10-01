@@ -1,6 +1,20 @@
-from datetime import datetime, timedelta
-from src.core.models import Usuario, InventarioONG, Notificacion, ActividadONG, Emergencia
-from src.core.enums import RolEnum, TipoRecursoEnum, TipoNotificacionEnum, EstadoActividadEnum, TipoDesastreEnum
+from datetime import datetime, timedelta, timezone
+from src.core.models import (
+    Usuario,
+    ONG,
+    InventarioONG,
+    RecursoCatalogo,
+    Notificacion,
+    ActividadONG,
+    Emergencia,
+    Municipio,
+    LoteNecesidades,
+    LoteDetalle,
+    Oferta,
+    VersionOferta,
+    DetalleVersionOferta,
+)
+from src.core.enums import RolEnum, TipoRecursoEnum, TipoNotificacionEnum, EstadoActividadEnum, TipoDesastreEnum, EstadoOfertaEnum
 from src.core.database import db
 
 def seed(app):
@@ -8,12 +22,26 @@ def seed(app):
     with app.app_context():
         print("🌱 Iniciando carga de datos iniciales (Seeding)...")
         seed_users()
+        seed_ongs()
+        seed_municipios()
         seed_ong_data()
         seed_emergencies_data()
+        seed_ccr_data()
         print("🌱 Finalización de la carga de datos iniciales (Seeding)!")
 
 def seed_users():
     print('🌱 Seedeando usuarios por cada rol...')
+
+    ong = ONG.query.filter_by(nombre='Red de Apoyo Comunitario').first()
+    if not ong:
+        ong = ONG(nombre='Red de Apoyo Comunitario', descripcion='12345/2020')
+        db.session.add(ong)
+
+    municipio = Municipio.query.filter_by(nombre='Sin asignar', provincia='Sin asignar').first()
+    if not municipio:
+        municipio = Municipio(nombre='Sin asignar', provincia='Sin asignar')
+        db.session.add(municipio)
+    db.session.flush()
 
     usuarios_base = [
         {
@@ -21,7 +49,7 @@ def seed_users():
             'email': 'operador@municipio.gob.ar',
             'password': 'Operador2026!',
             'rol': RolEnum.OPERADOR_MUNICIPAL,
-            'datos_adicionales': {'jurisdiccion': 'Zona Norte', 'turno': 'Mañana'},
+            'datos_adicionales': {'municipio_id': municipio.id},
         },
         {
             'nombre': 'Centro Coordinador',
@@ -35,7 +63,7 @@ def seed_users():
             'email': 'ong@ayuda.org',
             'password': 'Ong2026!',
             'rol': RolEnum.ONG,
-            'datos_adicionales': {'organizacion': 'Red de Apoyo Comunitario', 'personeria': '12345/2020'},
+            'datos_adicionales': {'ong_id': ong.id},
         },
         {
             'nombre': 'Auditor General',
@@ -61,7 +89,45 @@ def seed_users():
             db.session.add(usuario)
             print(f"  [+] Creado: {datos['email']} ({datos['rol'].value})")
         else:
+            if datos['rol'] in (RolEnum.ONG, RolEnum.OPERADOR_MUNICIPAL):
+                usuario.datos_adicionales = datos['datos_adicionales']
             print(f"  [-] El usuario ({datos['email']}) ya existe.")
+
+    db.session.commit()
+
+def seed_ongs():
+    print('🌱 Seedeando perfiles de ONG...')
+    usuarios = Usuario.query.filter_by(rol=RolEnum.ONG).all()
+
+    for usuario in usuarios:
+        ong_id = (usuario.datos_adicionales or {}).get('ong_id')
+        if ong_id is None:
+            continue
+
+        ong_id = int(ong_id)
+        if db.session.get(ONG, ong_id) is None:
+            db.session.add(ONG(id=ong_id, nombre=usuario.nombre))
+            print(f'  [+] ONG creada para el ID {ong_id}: {usuario.nombre}')
+
+    db.session.commit()
+
+def seed_municipios():
+    print('🌱 Seedeando municipios...')
+    usuarios = Usuario.query.filter_by(rol=RolEnum.OPERADOR_MUNICIPAL).all()
+
+    for usuario in usuarios:
+        municipio_id = (usuario.datos_adicionales or {}).get('municipio_id')
+        if municipio_id is None:
+            continue
+
+        municipio_id = int(municipio_id)
+        if db.session.get(Municipio, municipio_id) is None:
+            db.session.add(Municipio(
+                id=municipio_id,
+                nombre='Sin asignar',
+                provincia='Sin asignar',
+            ))
+            print(f'  [+] Municipio creado para el ID {municipio_id}')
 
     db.session.commit()
 
@@ -73,6 +139,12 @@ def seed_ong_data():
         return
 
     # 1. Inventario
+    ong_id = (ong.datos_adicionales or {}).get('ong_id')
+    ong_profile = db.session.get(ONG, int(ong_id)) if ong_id is not None else None
+    if not ong_profile:
+        print('  [!] Perfil de ONG no encontrado. Saltando seeding de ONG.')
+        return
+
     recursos_base = [
         {
             'nombre': 'Paramédicos de Emergencia',
@@ -109,16 +181,22 @@ def seed_ong_data():
     ]
 
     for r_data in recursos_base:
-        existente = InventarioONG.query.filter_by(ong_id=ong.id, nombre=r_data['nombre']).first()
+        existente = InventarioONG.query.join(RecursoCatalogo).filter(
+            InventarioONG.ong_id == ong_profile.id,
+            RecursoCatalogo.nombre == r_data['nombre'],
+        ).first()
         if not existente:
-            recurso = InventarioONG(
-                ong_id=ong.id,
+            catalogo = RecursoCatalogo(
                 nombre=r_data['nombre'],
-                tipo_recurso=r_data['tipo_recurso'],
+                tipo_recursos=r_data['tipo_recurso'],
                 unidad_medida=r_data['unidad_medida'],
+                descripcion=r_data['descripcion'],
+            )
+            recurso = InventarioONG(
+                ong=ong_profile,
+                recurso=catalogo,
                 cantidad_total=r_data['cantidad_total'],
                 cantidad_disponible=r_data['cantidad_disponible'],
-                descripcion=r_data['descripcion'],
             )
             db.session.add(recurso)
             print(f"  [+] Inventario creado: {r_data['nombre']}")
@@ -153,7 +231,7 @@ def seed_ong_data():
                 tipo=n_data['tipo'],
                 referencia_id=n_data['referencia_id'],
                 leida=n_data['leida'],
-                created_at=datetime.utcnow() - timedelta(days=n_data['dias_atras']),
+                created_at=datetime.now(timezone.utc) - timedelta(days=n_data['dias_atras']),
             )
             db.session.add(notif)
             print(f"  [+] Notificación creada: {n_data['titulo']}")
@@ -165,7 +243,7 @@ def seed_ong_data():
             'descripcion': 'Despliegue de equipo médico para atención de familias evacuadas por desborde del río.',
             'lote_referencia': 'LOTE-104-MED',
             'estado': EstadoActividadEnum.EN_EJECUCION,
-            'fecha_inicio': datetime.utcnow() - timedelta(hours=18),
+            'fecha_inicio': datetime.now(timezone.utc) - timedelta(hours=18),
             'fecha_finalizacion': None,
             'informe_cierre': None,
             'recursos_utilizados': '5 Paramédicos, 1 Ambulancia 4x4, 1 Carpa Sanitaria',
@@ -175,26 +253,26 @@ def seed_ong_data():
             'descripcion': 'Reparto de raciones calóricas y frazadas en centros comunitarios.',
             'lote_referencia': 'LOTE-098-ALIM',
             'estado': EstadoActividadEnum.FINALIZADA,
-            'fecha_inicio': datetime.utcnow() - timedelta(days=5),
-            'fecha_finalizacion': datetime.utcnow() - timedelta(days=3),
+            'fecha_inicio': datetime.now(timezone.utc) - timedelta(days=5),
+            'fecha_finalizacion': datetime.now(timezone.utc) - timedelta(days=3),
             'informe_cierre': 'Se distribuyeron 1200 raciones en 3 centros comunitarios designados. Cobertura al 100% de la población censada sin incidentes de gravedad.',
             'recursos_utilizados': '1200 Raciones de Alimento Seco, 4 Voluntarios',
         },
     ]
 
     for a_data in actividades_base:
-        existente = ActividadONG.query.filter_by(ong_id=ong.id, titulo=a_data['titulo']).first()
+        existente = ActividadONG.query.filter_by(ong_id=ong_profile.id, titulo=a_data['titulo']).first()
         if not existente:
             act = ActividadONG(
-                ong_id=ong.id,
+                ong_id=ong_profile.id,
                 titulo=a_data['titulo'],
                 descripcion=a_data['descripcion'],
-                lote_referencia=a_data['lote_referencia'],
+                lote_referencia=None,
                 estado=a_data['estado'],
                 fecha_inicio=a_data['fecha_inicio'],
                 fecha_finalizacion=a_data['fecha_finalizacion'],
                 informe_cierre=a_data['informe_cierre'],
-                recursos_utilizados=a_data['recursos_utilizados'],
+                recursos_utilizados={'descripcion': a_data['recursos_utilizados']},
             )
             db.session.add(act)
             print(f"  [+] Actividad creada: {a_data['titulo']} ({a_data['estado'].value})")
@@ -208,6 +286,11 @@ def seed_emergencies_data():
 
     if not operador:
         print('  [!] Usuario Operador Municipal no encontrado. Saltando seeding de Emergencias.')
+        return
+    municipio_id = (operador.datos_adicionales or {}).get('municipio_id')
+    municipio = db.session.get(Municipio, int(municipio_id)) if municipio_id is not None else None
+    if municipio is None:
+        print('  [!] Municipio asociado al usuario no encontrado. Saltando seeding de Emergencias.')
         return
 
     emergencias_base = [
@@ -256,9 +339,128 @@ def seed_emergencies_data():
                 nivel_gravedad=e_data['nivel_gravedad'],
                 zona_afectada=e_data['zona_afectada'],
                 descripcion=e_data['descripcion'],
-                reportante_id=e_data['reportante_id']
+                reportante_id=e_data['reportante_id'],
+                municipio_id=municipio.id,
             )
             db.session.add(emergencia)
             print(f"  [+] Emergencia creada: {e_data['zona_afectada']} ({e_data['tipo_desastre'].value})")
+
+    db.session.commit()
+
+
+def seed_ccr_data():
+    """Prepara escenarios repetibles de publicación y decisión para el CCR."""
+    print('🌱 Seedeando escenarios CCR...')
+    operador = Usuario.query.filter_by(email='operador@municipio.gob.ar').first()
+    ong_usuario = Usuario.query.filter_by(email='ong@ayuda.org').first()
+    if not operador or not ong_usuario:
+        print('  [!] Faltan usuarios CCR/ONG. Saltando escenarios CCR.')
+        return
+
+    municipio_id = (operador.datos_adicionales or {}).get('municipio_id')
+    ong_id = (ong_usuario.datos_adicionales or {}).get('ong_id')
+    municipio = db.session.get(Municipio, int(municipio_id)) if municipio_id is not None else None
+    ong = db.session.get(ONG, int(ong_id)) if ong_id is not None else None
+    recurso_publicado = RecursoCatalogo.query.filter_by(nombre='Paramédicos de Emergencia').first()
+    recurso_decision = RecursoCatalogo.query.filter_by(nombre='Raciones de Alimento Seco').first()
+    if not municipio or not ong or not recurso_publicado or not recurso_decision:
+        print('  [!] Faltan municipio, perfil ONG o recursos de catálogo. Saltando escenarios CCR.')
+        return
+
+    emergencias = {}
+    datos_emergencias = (
+        ('CCR - Convocatoria publicada', 'Escenario seed CCR con convocatoria vigente.'),
+        ('CCR - Mínimos pendientes', 'Escenario seed CCR vencido con ofertas por debajo de min_r.'),
+    )
+    for zona, descripcion in datos_emergencias:
+        emergencia = Emergencia.query.filter_by(zona_afectada=zona).first()
+        if emergencia is None:
+            emergencia = Emergencia(
+                tipo_desastre=TipoDesastreEnum.hidrologico,
+                nivel_gravedad=2,
+                zona_afectada=zona,
+                descripcion=descripcion,
+                responsable_id=operador.id,
+                municipio_id=municipio.id,
+            )
+            db.session.add(emergencia)
+        emergencias[zona] = emergencia
+    db.session.flush()
+
+    ahora = datetime.now(timezone.utc)
+    escenarios_lotes = (
+        (emergencias['CCR - Convocatoria publicada'], recurso_publicado, 40, 15,
+         ahora - timedelta(hours=1), ahora + timedelta(days=7)),
+        (emergencias['CCR - Mínimos pendientes'], recurso_decision, 100, 20,
+         ahora - timedelta(days=2), ahora - timedelta(hours=1)),
+    )
+    lotes = []
+    for emergencia, recurso, cantidad, min_r, inicio, cierre in escenarios_lotes:
+        lote = LoteNecesidades.query.filter_by(emergencia_id=emergencia.id).first()
+        if lote is None:
+            lote = LoteNecesidades(emergencia=emergencia)
+            db.session.add(lote)
+        lote.fecha_inicio_ofertas = inicio
+        lote.fecha_cierre_ofertas = cierre
+        lote.detalles.clear()
+        lote.detalles.append(LoteDetalle(
+            recurso=recurso,
+            cantidad_necesaria=cantidad,
+            cantidad_minima=min_r,
+        ))
+        lotes.append((lote, emergencia, recurso, min_r))
+    db.session.flush()
+
+    lote_decision, emergencia_decision, recurso_decision, _ = lotes[1]
+    oferta = Oferta.query.filter_by(id_emergencia=emergencia_decision.id).first()
+    if oferta is None:
+        oferta = Oferta(emergencia=emergencia_decision)
+        db.session.add(oferta)
+        db.session.flush()
+    oferta.estado = EstadoOfertaEnum.PENDIENTE
+    oferta.version_actual = 1
+    oferta.es_conjunta = False
+
+    version = VersionOferta.query.filter_by(id_oferta=oferta.id_oferta, numero_version=1).first()
+    if version is None:
+        version = VersionOferta(
+            oferta=oferta,
+            numero_version=1,
+            usuario_modificacion=ong_usuario.id,
+        )
+        db.session.add(version)
+    version.usuario_modificacion = ong_usuario.id
+    version.estado_versiones = 'pendiente'
+    version.observaciones = 'Seed CCR: convocatoria vencida bajo min_r'
+    version.detalles.clear()
+    version.detalles.append(DetalleVersionOferta(
+        ong=ong,
+        recurso=recurso_decision,
+        cantidad=5,
+        cantidad_adjudicada=0,
+    ))
+
+    lote_publicado, emergencia_publicada, recurso_publicado, min_publicado = lotes[0]
+    titulo = f'Convocatoria CCR publicada #{lote_publicado.id}'
+    notificacion = Notificacion.query.filter_by(usuario_id=ong_usuario.id, titulo=titulo).first()
+    mensaje = (
+        f'Convocatoria para la emergencia {emergencia_publicada.zona_afectada}: '
+        f'{recurso_publicado.nombre}, mínimo requerido {min_publicado}.'
+    )
+    if notificacion is None:
+        notificacion = Notificacion(
+            usuario_id=ong_usuario.id,
+            titulo=titulo,
+            mensaje=mensaje,
+            tipo=TipoNotificacionEnum.CONVOCATORIA,
+            referencia_id=lote_publicado.id,
+            leida=False,
+        )
+        db.session.add(notificacion)
+    else:
+        notificacion.mensaje = mensaje
+        notificacion.tipo = TipoNotificacionEnum.CONVOCATORIA
+        notificacion.referencia_id = lote_publicado.id
+        notificacion.leida = False
 
     db.session.commit()
