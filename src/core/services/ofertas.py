@@ -1,7 +1,7 @@
 from src.core.models import Oferta
 from src.core.enums import EstadoOfertaEnum
 from src.core.database import db
-from datetime import datetime
+from datetime import datetime, timezone
 
 from src.core.database import db
 from src.core.models.oferta import Oferta
@@ -16,6 +16,9 @@ from src.core.models.lote_necesidades import LoteNecesidades
 from src.core.models.oferta_participante import OfertaParticipante
 from src.core.enums import RolEnum, TipoNotificacionEnum
 from src.core.services.notificaciones import crear_notificacion
+from src.core.models.actividad import ActividadONG
+from src.core.models.notificacion import Notificacion
+from src.core.enums import EstadoActividadEnum
 
 
 def listar_ongs_colaboradoras(ong_id):
@@ -156,6 +159,25 @@ def listar_ofertas_aceptadas(emergencia_id: int):
         .all()
     )
 
+
+def listar_ofertas_adjudicadas(emergencia_id: int):
+    return (
+        Oferta.query
+        .filter_by(id_emergencia=emergencia_id, estado=EstadoOfertaEnum.ADJUDICADA.value)
+        .order_by(Oferta.fecha_ultima_modificacion.desc())
+        .all()
+    )
+
+
+def listar_despliegues_oferta(oferta: Oferta):
+    return (
+        ActividadONG.query
+        .filter(ActividadONG.titulo == f'Despliegue por adjudicación de oferta #{oferta.id}')
+        .order_by(ActividadONG.fecha_inicio.asc())
+        .all()
+    )
+
+
 def obtener_version_vigente(oferta: Oferta):
     """Devuelve la versión vigente (actual) de una oferta, con sus recursos ofrecidos."""
     return next(
@@ -164,25 +186,78 @@ def obtener_version_vigente(oferta: Oferta):
     )
 
 
-def adjudicar_oferta(oferta_id: int):
-    """Marca una oferta como Adjudicada y adjudica la cantidad completa ofrecida en su versión vigente."""
+def adjudicar_oferta(oferta_id: int, emergencia_id: int = None):
+    """Adjudica una oferta, notifica a sus ONGs y registra un despliegue por ONG."""
     oferta = Oferta.query.get_or_404(oferta_id)
+    if emergencia_id is not None and oferta.id_emergencia != emergencia_id:
+        raise ValueError('La oferta no pertenece a esta emergencia.')
 
-    if oferta.estado != EstadoOfertaEnum.ACEPTADA.value:
+    estado_actual = oferta.estado.value if hasattr(oferta.estado, 'value') else oferta.estado
+    if estado_actual != EstadoOfertaEnum.ACEPTADA.value:
         raise ValueError(f"Solo se pueden adjudicar ofertas en estado Aceptada (estado actual: {oferta.estado})")
-
-    oferta.estado = EstadoOfertaEnum.ADJUDICADA.value
 
     version_vigente = next(
         (v for v in oferta.versiones if v.numero_version == oferta.version_actual),
         None,
     )
-    if version_vigente:
-        for detalle in version_vigente.detalles:
-            detalle.cantidad_adjudicada = detalle.cantidad  # adjudicación total, no parcial
+    if version_vigente is None or not version_vigente.detalles:
+        raise ValueError('La oferta no tiene recursos vigentes para adjudicar.')
 
-    db.session.commit()
-    return oferta
+    try:
+        oferta.estado = EstadoOfertaEnum.ADJUDICADA
+        oferta.fecha_ultima_modificacion = datetime.now(timezone.utc)
+        recursos_por_ong = {}
+        for detalle in version_vigente.detalles:
+            detalle.cantidad_adjudicada = detalle.cantidad
+            recursos_por_ong.setdefault(detalle.id_ong, []).append({
+                'recurso_id': detalle.id_recurso,
+                'nombre': detalle.recurso.nombre,
+                'cantidad': detalle.cantidad,
+                'cantidad_adjudicada': detalle.cantidad,
+            })
+
+        for ong_id, recursos in recursos_por_ong.items():
+            actividad_titulo = f'Despliegue por adjudicación de oferta #{oferta.id}'
+            actividad = ActividadONG.query.filter_by(
+                ong_id=ong_id,
+                lote_referencia=oferta.convocatoria_id,
+                titulo=actividad_titulo,
+            ).first()
+            if actividad is None:
+                db.session.add(ActividadONG(
+                    ong_id=ong_id,
+                    titulo=actividad_titulo,
+                    descripcion=f'Despliegue de recursos adjudicados para la emergencia #{oferta.id_emergencia}.',
+                    lote_referencia=oferta.convocatoria_id,
+                    estado=EstadoActividadEnum.EN_EJECUCION,
+                    fecha_inicio=datetime.now(timezone.utc),
+                    recursos_utilizados={'oferta_id': oferta.id, 'recursos': recursos},
+                ))
+
+            usuarios = Usuario.query.filter_by(rol=RolEnum.ONG).all()
+            for usuario in usuarios:
+                try:
+                    usuario_ong_id = int((usuario.datos_adicionales or {}).get('ong_id'))
+                except (TypeError, ValueError):
+                    continue
+                if usuario_ong_id != ong_id:
+                    continue
+                titulo = f'Oferta #{oferta.id} adjudicada'
+                if Notificacion.query.filter_by(usuario_id=usuario.id, titulo=titulo).first() is None:
+                    crear_notificacion(
+                        usuario_id=usuario.id,
+                        titulo=titulo,
+                        mensaje=f'Tu ONG recibió la adjudicación de recursos para la emergencia #{oferta.id_emergencia}.',
+                        tipo=TipoNotificacionEnum.ADJUDICACION_LOTE,
+                        referencia_id=oferta.convocatoria_id or oferta.id,
+                        commit=False,
+                    )
+
+        db.session.commit()
+        return oferta
+    except Exception:
+        db.session.rollback()
+        raise
 def listar_ofertas(id_ong):
     """Devuelve todas las ofertas."""
     ofertas = Oferta.query.all()
@@ -250,7 +325,7 @@ def listar_ofertas(id_ong):
 
     return resultado
 
-def _validar_recursos(recursos, id_ong):
+def _validar_recursos(recursos, id_ong, recurso_ids_permitidos=None):
     """
     Verifica que haya al menos un recurso, que no se repitan, cantidades válidas y que correspondan a la ONG.
     """
@@ -259,6 +334,8 @@ def _validar_recursos(recursos, id_ong):
         raise ValueError("Debe seleccionar al menos un recurso.")
 
     ids_recursos = [r["id_recurso"] for r in recursos]
+    if recurso_ids_permitidos is not None:
+        recurso_ids_permitidos = set(recurso_ids_permitidos)
 
     if len(ids_recursos) != len(set(ids_recursos)):
         raise ValueError("No se puede repetir un recurso dentro de una oferta.")
@@ -276,6 +353,9 @@ def _validar_recursos(recursos, id_ong):
             raise ValueError(
                 f"El recurso {recurso_data['id_recurso']} no pertenece a la ONG."
             )
+
+        if recurso_ids_permitidos is not None and recurso.id_recurso not in recurso_ids_permitidos:
+            raise ValueError('Solo puedes ofertar recursos solicitados por esta convocatoria.')
 
         cantidad = recurso_data["cantidad"]
 
@@ -296,7 +376,8 @@ def _validar_recursos(recursos, id_ong):
 
 def crear_oferta(convocatoria_id, recursos, ong_id, usuario_id, colaboradoras_ids=()):
     convocatoria = _validar_convocatoria_y_duplicado(convocatoria_id, ong_id)
-    recursos_modelos = _validar_recursos(recursos, ong_id)
+    recurso_ids_permitidos = {detalle.id_recurso for detalle in convocatoria.detalles}
+    recursos_modelos = _validar_recursos(recursos, ong_id, recurso_ids_permitidos)
     try:
         colaboradoras_ids = {int(value) for value in colaboradoras_ids}
     except (TypeError, ValueError) as error:
@@ -382,7 +463,12 @@ def modificar_oferta(id_oferta, recursos, ong_id, usuario_id, colaboradoras_ids=
     if not recursos:
         raise ValueError('Debe asignar al menos un recurso de tu inventario.')
 
-    recursos_modelos = _validar_recursos(recursos, ong_id)
+    recurso_ids_permitidos = (
+        {detalle.id_recurso for detalle in oferta.convocatoria.detalles}
+        if oferta.convocatoria is not None
+        else set()
+    )
+    recursos_modelos = _validar_recursos(recursos, ong_id, recurso_ids_permitidos)
     es_creadora = oferta.creada_por_ong_id == ong_id
     if not es_creadora and colaboradoras_ids:
         raise ValueError('Solo la ONG creadora puede invitar nuevas colaboradoras.')
