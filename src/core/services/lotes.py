@@ -60,6 +60,18 @@ def listar_lotes():
     )
 
 
+def obtener_lote(lote_id: int):
+    return (
+        LoteNecesidades.query
+        .options(
+            joinedload(LoteNecesidades.emergencia),
+            selectinload(LoteNecesidades.detalles).joinedload(LoteDetalle.recurso),
+        )
+        .filter(LoteNecesidades.id == lote_id)
+        .first()
+    )
+
+
 def _notificar_convocatoria(lote: LoteNecesidades, reabierta: bool = False) -> None:
     emergencia = lote.emergencia
     recursos = ', '.join(
@@ -124,8 +136,10 @@ def evaluar_minimos_lote(lote: LoteNecesidades, cantidades_ofertadas: dict[int, 
         recurso_id = detalle.id_recurso or detalle.recurso.id
         necesidad = necesidades.setdefault(recurso_id, {
             'recurso': detalle.recurso,
+            'cantidad_necesaria': 0,
             'cantidad_minima': 0,
         })
+        necesidad['cantidad_necesaria'] += detalle.cantidad_necesaria
         necesidad['cantidad_minima'] += detalle.cantidad_minima
 
     evaluacion = []
@@ -134,6 +148,7 @@ def evaluar_minimos_lote(lote: LoteNecesidades, cantidades_ofertadas: dict[int, 
         min_r = necesidad['cantidad_minima']
         evaluacion.append({
             'recurso': necesidad['recurso'],
+            'cantidad_necesaria': necesidad['cantidad_necesaria'],
             'cant_r': cant_r,
             'min_r': min_r,
             'alcanzado': cant_r >= min_r,

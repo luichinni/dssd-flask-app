@@ -55,79 +55,11 @@
                                     <div>Cierre: {{ lote.fecha_cierre_ofertas.strftime('%d/%m/%Y %H:%M UTC') if lote.fecha_cierre_ofertas else 'Sin definir' }}</div>
                                 </td>
                                 <td class="px-4 py-3">
-                                    {% if requiere_decision[lote.id] %}
-                                        <div class="min-w-64 space-y-3">
-                                            <div class="space-y-1">
-                                                {% for item in evaluaciones[lote.id] %}
-                                                    <p class="text-xs {% if item.alcanzado %}text-emerald-700{% else %}text-amber-800{% endif %}">
-                                                        {{ item.recurso.nombre }}: cant_r {{ item.cant_r }} / min_r {{ item.min_r }}
-                                                    </p>
-                                                {% endfor %}
-                                            </div>
-
-                                            <form method="post" action="{{ url_for('ccr.decidir_lote', lote_id=lote.id) }}" class="space-y-2 rounded border border-slate-200 p-2">
-                                                <input type="hidden" name="decision" value="reabrir">
-                                                <label class="block text-xs font-medium text-slate-700" for="reabrir-cierre-{{ lote.id }}">Reabrir sin cambios · cierre UTC</label>
-                                                <input id="reabrir-cierre-{{ lote.id }}" name="fecha_cierre_ofertas" type="datetime-local" required value="{{ reintento_cierres[lote.id] }}"
-                                                       class="w-full rounded border border-slate-300 px-2 py-1 text-xs">
-                                                <button type="submit" class="rounded bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-800">Reabrir convocatoria</button>
-                                            </form>
-
-                                            <form method="post" action="{{ url_for('ccr.decidir_lote', lote_id=lote.id) }}">
-                                                <input type="hidden" name="decision" value="continuar">
-                                                <button type="submit" class="rounded border border-emerald-700 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">Continuar con ofertas disponibles</button>
-                                            </form>
-
-                                            <details class="rounded border border-slate-200 p-2">
-                                                <summary class="cursor-pointer text-xs font-semibold text-slate-700">Reformular lote</summary>
-                                                <form method="post" action="{{ url_for('ccr.decidir_lote', lote_id=lote.id) }}" class="mt-2 space-y-2">
-                                                    <input type="hidden" name="decision" value="reformular">
-                                                    <label class="block text-xs font-medium text-slate-700" for="reformular-cierre-{{ lote.id }}">Nuevo cierre UTC</label>
-                                                    <input id="reformular-cierre-{{ lote.id }}" name="fecha_cierre_ofertas" type="datetime-local" required value="{{ reintento_cierres[lote.id] }}"
-                                                           class="w-full rounded border border-slate-300 px-2 py-1 text-xs">
-                                                    <div id="reformular-recursos-{{ lote.id }}" class="space-y-2">
-                                                        {% for detalle in lote.detalles %}
-                                                            <div class="reformulation-row grid grid-cols-2 gap-2 rounded border border-slate-100 p-2">
-                                                                <label class="col-span-2 text-xs font-medium text-slate-700">Recurso
-                                                                    <select name="recurso_id" required class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs">
-                                                                        {% for recurso in recursos %}
-                                                                            <option value="{{ recurso.id }}" {% if recurso.id == detalle.recurso.id %}selected{% endif %}>{{ recurso.nombre }}</option>
-                                                                        {% endfor %}
-                                                                    </select>
-                                                                </label>
-                                                                <label class="text-xs font-medium text-slate-700">Cantidad necesaria
-                                                                    <input name="cantidad_necesaria" type="number" min="1" required value="{{ detalle.cantidad_necesaria }}" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs">
-                                                                </label>
-                                                                <label class="text-xs font-medium text-slate-700">min_r
-                                                                    <input name="min_r" type="number" min="1" required value="{{ detalle.cantidad_minima }}" class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs">
-                                                                </label>
-                                                                <button type="button" class="remove-reformulation-row col-span-2 justify-self-end text-xs font-medium text-red-700">Quitar recurso</button>
-                                                            </div>
-                                                        {% endfor %}
-                                                    </div>
-                                                    <button type="button" data-add-reformulation-row data-rows="reformular-recursos-{{ lote.id }}" data-template="reformular-template-{{ lote.id }}"
-                                                            class="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">Agregar recurso</button>
-                                                    <template id="reformular-template-{{ lote.id }}">
-                                                        <div class="reformulation-row grid grid-cols-2 gap-2 rounded border border-slate-100 p-2">
-                                                            <label class="col-span-2 text-xs font-medium text-slate-700">Recurso
-                                                                <select name="recurso_id" required class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs">
-                                                                    <option value="">Seleccionar...</option>
-                                                                    {% for recurso in recursos %}<option value="{{ recurso.id }}">{{ recurso.nombre }}</option>{% endfor %}
-                                                                </select>
-                                                            </label>
-                                                            <label class="text-xs font-medium text-slate-700">Cantidad necesaria
-                                                                <input name="cantidad_necesaria" type="number" min="1" required class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs">
-                                                            </label>
-                                                            <label class="text-xs font-medium text-slate-700">min_r
-                                                                <input name="min_r" type="number" min="1" required class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs">
-                                                            </label>
-                                                            <button type="button" class="remove-reformulation-row col-span-2 justify-self-end text-xs font-medium text-red-700">Quitar recurso</button>
-                                                        </div>
-                                                    </template>
-                                                    <button type="submit" class="rounded bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-800">Reformular y reabrir</button>
-                                                </form>
-                                            </details>
-                                        </div>
+                                    {% if estado == 'vencido' %}
+                                        <a href="{{ url_for('ccr.evaluar_convocatoria', lote_id=lote.id) }}"
+                                           class="inline-flex rounded-md bg-indigo-700 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-800">
+                                            Evaluar Convocatoria
+                                        </a>
                                     {% elif estado == 'fallido' %}
                                         <form method="post" action="{{ url_for('ccr.reintentar', lote_id=lote.id) }}" class="min-w-56 space-y-2">
                                             <label class="block text-xs font-medium text-slate-700" for="cierre-{{ lote.id }}">Nuevo cierre (UTC)</label>
@@ -146,8 +78,6 @@
                                                 Reintentar
                                             </button>
                                         </form>
-                                    {% elif estado == 'vencido' %}
-                                        <span class="text-xs text-emerald-700">Mínimos alcanzados</span>
                                     {% else %}
                                         <span class="text-xs text-slate-500">Sin acciones</span>
                                     {% endif %}
@@ -285,22 +215,5 @@
         }
     });
 
-    document.addEventListener('click', (event) => {
-        const addButton = event.target.closest('[data-add-reformulation-row]');
-        if (addButton) {
-            const rows = document.getElementById(addButton.dataset.rows);
-            const template = document.getElementById(addButton.dataset.template);
-            rows.appendChild(template.content.cloneNode(true));
-            return;
-        }
-
-        const removeButton = event.target.closest('.remove-reformulation-row');
-        if (removeButton) {
-            const rows = removeButton.closest('[id^="reformular-recursos-"]');
-            if (rows.children.length > 1) {
-                removeButton.closest('.reformulation-row').remove();
-            }
-        }
-    });
 </script>
 {% endblock %}

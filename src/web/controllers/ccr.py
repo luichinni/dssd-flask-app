@@ -16,6 +16,7 @@ from src.core.services.lotes import (
     listar_emergencias,
     listar_lotes,
     lote_requiere_decision,
+    obtener_lote,
     publicar_lote,
     reabrir_convocatoria,
     reformular_lote,
@@ -56,15 +57,6 @@ def lotes():
     recursos = RecursoCatalogo.query.order_by(RecursoCatalogo.nombre.asc()).all()
     publicaciones = listar_lotes()
     estados = {lote.id: estado_lote(lote) for lote in publicaciones}
-    cantidades_por_emergencia = {}
-    evaluaciones = {}
-    requiere_decision = {}
-    for lote in publicaciones:
-        if lote.emergencia_id not in cantidades_por_emergencia:
-            cantidades_por_emergencia[lote.emergencia_id] = cantidades_ofertadas_por_recurso(lote.emergencia_id)
-        cantidades = cantidades_por_emergencia[lote.emergencia_id]
-        evaluaciones[lote.id] = evaluar_minimos_lote(lote, cantidades)
-        requiere_decision[lote.id] = lote_requiere_decision(lote, cantidades)
     reintento_cierres = {
         lote.id: (datetime.now(timezone.utc) + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M')
         for lote in publicaciones
@@ -108,9 +100,33 @@ def lotes():
         default_cierre=default_cierre,
         publicaciones=publicaciones,
         estados=estados,
-        evaluaciones=evaluaciones,
-        requiere_decision=requiere_decision,
         reintento_cierres=reintento_cierres,
+    )
+
+
+@ccr_bp.get('/lotes/<int:lote_id>/evaluar')
+@login_required
+@roles_required(RolEnum.CENTRO_COORDINADOR)
+def evaluar_convocatoria(lote_id: int):
+    lote = obtener_lote(lote_id)
+    if lote is None:
+        flash('La convocatoria seleccionada no existe.', 'error')
+        return redirect(url_for('ccr.lotes'))
+
+    estado = estado_lote(lote)
+    if estado != 'vencido':
+        flash('La convocatoria todavía no finalizó.', 'info')
+        return redirect(url_for('ccr.lotes'))
+
+    cantidades = cantidades_ofertadas_por_recurso(lote.emergencia_id)
+    evaluacion = evaluar_minimos_lote(lote, cantidades)
+    return render_template(
+        'ccr/evaluar_convocatoria.html',
+        lote=lote,
+        evaluacion=evaluacion,
+        requiere_decision=lote_requiere_decision(lote, cantidades),
+        reintento_cierre=(datetime.now(timezone.utc) + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M'),
+        recursos=RecursoCatalogo.query.order_by(RecursoCatalogo.nombre.asc()).all(),
     )
 
 
