@@ -1,0 +1,159 @@
+{% extends "layout.html" %}
+
+{% block title %}Evaluar convocatoria #{{ lote.id }} - Gestión de Emergencias{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold uppercase text-indigo-700">Centro Coordinador · Convocatoria vencida</p>
+            <h1 class="mt-1 text-2xl font-bold text-slate-900">Evaluación del lote #{{ lote.id }}</h1>
+            <p class="mt-2 text-sm text-slate-600">
+                Emergencia #{{ lote.emergencia.id }} · {{ lote.emergencia.zona_afectada }} · {{ lote.emergencia.tipo_desastre.value }}
+            </p>
+        </div>
+    </header>
+
+    <section aria-labelledby="convocatoria-heading" class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div class="border-b border-slate-200 px-5 py-4">
+            <h2 id="convocatoria-heading" class="text-lg font-semibold text-slate-900">Recursos y cantidades ofertadas</h2>
+            <p class="mt-1 text-xs text-slate-500">
+                Inicio: {{ lote.fecha_inicio_ofertas.strftime('%d/%m/%Y %H:%M UTC') if lote.fecha_inicio_ofertas else 'Sin publicar' }} ·
+                Cierre: {{ lote.fecha_cierre_ofertas.strftime('%d/%m/%Y %H:%M UTC') if lote.fecha_cierre_ofertas else 'Sin definir' }}
+            </p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                <thead class="bg-slate-50 text-xs uppercase text-slate-600">
+                    <tr>
+                        <th scope="col" class="px-5 py-3">Recurso</th>
+                        <th scope="col" class="px-5 py-3">Cantidad necesaria</th>
+                        <th scope="col" class="px-5 py-3">min_r</th>
+                        <th scope="col" class="px-5 py-3">cant_r ofertada</th>
+                        <th scope="col" class="px-5 py-3">Evaluación</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for item in evaluacion %}
+                        <tr>
+                            <td class="px-5 py-3 font-medium text-slate-900">{{ item.recurso.nombre }}</td>
+                            <td class="px-5 py-3">{{ item.cantidad_necesaria }}</td>
+                            <td class="px-5 py-3">{{ item.min_r }}</td>
+                            <td class="px-5 py-3">{{ item.cant_r }}</td>
+                            <td class="px-5 py-3">
+                                {% if item.alcanzado %}
+                                    <span class="rounded bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">Mínimo alcanzado</span>
+                                {% else %}
+                                    <span class="rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">Por debajo del mínimo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="5" class="px-5 py-5 text-sm text-slate-600">El lote no tiene detalles de recursos.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {% if requiere_decision %}
+        <section aria-labelledby="decision-heading" class="space-y-4">
+            <div>
+                <h2 id="decision-heading" class="text-lg font-semibold text-slate-900">Curso de acción</h2>
+                <p class="mt-1 text-sm text-slate-600">Selecciona cómo proceder con esta convocatoria finalizada.</p>
+            </div>
+
+            <div class="grid gap-4 lg:grid-cols-3">
+                <form method="post" action="{{ url_for('ccr.decidir_lote', lote_id=lote.id) }}" class="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4">
+                    <input type="hidden" name="decision" value="reabrir">
+                    <div>
+                        <h3 class="font-semibold text-slate-900">Reabrir sin modificaciones</h3>
+                        <p class="mt-1 text-sm text-slate-600">Conserva los recursos y mínimos actuales.</p>
+                    </div>
+                    <label class="mt-auto text-xs font-medium text-slate-700" for="reabrir-cierre">Nuevo cierre (UTC)
+                        <input id="reabrir-cierre" name="fecha_cierre_ofertas" type="datetime-local" required value="{{ reintento_cierre }}"
+                               class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                    </label>
+                    <button type="submit" class="rounded-md bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800">Reabrir convocatoria</button>
+                </form>
+
+                <form method="post" action="{{ url_for('ccr.decidir_lote', lote_id=lote.id) }}" class="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4">
+                    <input type="hidden" name="decision" value="continuar">
+                    <div>
+                        <h3 class="font-semibold text-slate-900">Continuar con ofertas disponibles</h3>
+                        <p class="mt-1 text-sm text-slate-600">Continúa con las propuestas recibidas aunque algún mínimo no se haya alcanzado.</p>
+                    </div>
+                    <button type="submit" class="mt-auto rounded-md border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">Continuar con ofertas</button>
+                </form>
+
+                <details class="rounded-lg border border-slate-200 bg-white p-4">
+                    <summary class="cursor-pointer font-semibold text-slate-900">Reformular los lotes</summary>
+                    <p class="mt-1 text-sm text-slate-600">Ajusta recursos, cantidades y mínimos antes de abrir una nueva convocatoria.</p>
+                    <form method="post" action="{{ url_for('ccr.decidir_lote', lote_id=lote.id) }}" class="mt-3 space-y-3">
+                        <input type="hidden" name="decision" value="reformular">
+                        <label class="block text-xs font-medium text-slate-700" for="reformular-cierre">Nuevo cierre (UTC)
+                            <input id="reformular-cierre" name="fecha_cierre_ofertas" type="datetime-local" required value="{{ reintento_cierre }}"
+                                   class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+                        </label>
+                        <div id="reformular-recursos" class="space-y-2">
+                            {% for detalle in lote.detalles %}
+                                <div class="reformulation-row grid grid-cols-2 gap-2 rounded border border-slate-100 p-2">
+                                    <label class="col-span-2 text-xs font-medium text-slate-700">Recurso
+                                        <select name="recurso_id" required class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm">
+                                            {% for recurso in recursos %}
+                                                <option value="{{ recurso.id }}" {% if recurso.id == detalle.recurso.id %}selected{% endif %}>{{ recurso.nombre }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </label>
+                                    <label class="text-xs font-medium text-slate-700">Cantidad necesaria
+                                        <input name="cantidad_necesaria" type="number" min="1" required value="{{ detalle.cantidad_necesaria }}" class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm">
+                                    </label>
+                                    <label class="text-xs font-medium text-slate-700">min_r
+                                        <input name="min_r" type="number" min="1" required value="{{ detalle.cantidad_minima }}" class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm">
+                                    </label>
+                                    <button type="button" class="remove-reformulation-row col-span-2 justify-self-end text-xs font-medium text-red-700">Quitar recurso</button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <button type="button" id="add-reformulation-row" class="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Agregar recurso</button>
+                        <template id="reformulation-row-template">
+                            <div class="reformulation-row grid grid-cols-2 gap-2 rounded border border-slate-100 p-2">
+                                <label class="col-span-2 text-xs font-medium text-slate-700">Recurso
+                                    <select name="recurso_id" required class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm">
+                                        <option value="">Seleccionar...</option>
+                                        {% for recurso in recursos %}<option value="{{ recurso.id }}">{{ recurso.nombre }}</option>{% endfor %}
+                                    </select>
+                                </label>
+                                <label class="text-xs font-medium text-slate-700">Cantidad necesaria
+                                    <input name="cantidad_necesaria" type="number" min="1" required class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm">
+                                </label>
+                                <label class="text-xs font-medium text-slate-700">min_r
+                                    <input name="min_r" type="number" min="1" required class="mt-1 w-full rounded border border-slate-300 px-2 py-2 text-sm">
+                                </label>
+                                <button type="button" class="remove-reformulation-row col-span-2 justify-self-end text-xs font-medium text-red-700">Quitar recurso</button>
+                            </div>
+                        </template>
+                        <button type="submit" class="w-full rounded-md bg-indigo-700 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-800">Reformular y reabrir</button>
+                    </form>
+                </details>
+            </div>
+        </section>
+    {% else %}
+        <p class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">Las cantidades mínimas requeridas fueron alcanzadas; no hay una decisión pendiente para esta convocatoria.</p>
+    {% endif %}
+</div>
+
+<script>
+    const reformulationRows = document.getElementById('reformular-recursos');
+    const reformulationTemplate = document.getElementById('reformulation-row-template');
+    document.getElementById('add-reformulation-row')?.addEventListener('click', () => {
+        reformulationRows.appendChild(reformulationTemplate.content.cloneNode(true));
+    });
+    reformulationRows?.addEventListener('click', (event) => {
+        const removeButton = event.target.closest('.remove-reformulation-row');
+        if (removeButton && reformulationRows.children.length > 1) {
+            removeButton.closest('.reformulation-row').remove();
+        }
+    });
+</script>
+{% endblock %}
