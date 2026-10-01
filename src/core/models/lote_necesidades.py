@@ -9,6 +9,8 @@ class LoteNecesidades(db.Model):
     fecha_inicio_ofertas = db.Column(db.DateTime(timezone=True), nullable=True)
     fecha_cierre_ofertas = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    bonita_estado = db.Column(db.String(20), nullable=False, default="sin_sincronizar", server_default="sin_sincronizar")
+
     emergencia = db.relationship('Emergencia', back_populates='lotes')
     detalles = db.relationship('LoteDetalle', back_populates='lote', cascade='all, delete-orphan')
     actividades = db.relationship('ActividadONG', back_populates='lote')
