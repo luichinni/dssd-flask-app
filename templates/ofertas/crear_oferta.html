@@ -4,77 +4,74 @@
 
 {% block content %}
 
-<div class="max-w-2x1 mx-auto space-y-6">
+<div class="max-w-3xl mx-auto space-y-6">
     <div>
-        <p class = "text-sm font-semibold uppercase tracking-wide text-indigo-600"> Ofertas </p>
-        <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900"> Crear Oferta</h1>
-        <p class="mt-2 text-slate-600"> Elija los recursos que desea ofrecer y la cantidad disponible para cada uno. </p>
+        <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Ofertas</p>
+        <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-900">Crear Oferta</h1>
+        <p class="mt-2 text-sm text-slate-600">Cree nuevas ofertas de ayuda para las emergencias.</p>
     </div>
 
-    <form method="POST" action="{{ url_for('ong.crear_oferta') }}" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
-        <div>
-            <label for="id_emergencia" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">Emergencia</label>
-            <input type="number" id="id_emergencia" name="id_emergencia" required class="mt-1 block w-full rounded-lg border-slate-300" placeholder="ID de la emergencia">
+    <form method="POST" action="{{ url_for('ong.crear_oferta', convocatoria_id=convocatoria.id) }}" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+        <input type="hidden" name="convocatoria_id" value="{{ convocatoria.id }}">
+        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p class="text-sm font-semibold text-slate-900">Convocatoria #{{ convocatoria.id }}</p>
+            <p class="mt-1 text-sm text-slate-600">{{ convocatoria.emergencia.zona_afectada }}</p>
         </div>
 
         <div>
-            <label for="es_conjunta" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">¿La oferta es conjunta?</label>
-            <select id="es_conjunta" name="es_conjunta" required class="mt-1 block w-full rounded-lg border-slate-300">
-                <option value="">Seleccionar...</option>
-                <option value="true">Sí</option>
-                <option value="false">No</option>
-            </select>
+            <label class="mb-1.5 block text-sm font-semibold text-slate-800">Seleccione los recursos a ofrecer *</label>
+            <div class="space-y-3">
+                {% for recurso in inventario %}
+                <div class="recurso-card flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 p-4">
+                    <input
+                        type="checkbox"
+                        id="recurso_{{ recurso.id }}"
+                        name="id_recurso"
+                        value="{{ recurso.id }}"
+                        class="recurso-checkbox h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        onchange="habilitarCantidad(this)">
+                    <label for="recurso_{{ recurso.id }}" class="min-w-0 flex-1 cursor-pointer">
+                        <span class="font-medium text-slate-900">{{ recurso.nombre }}</span>
+                        <span class="block text-sm text-slate-500">Disponible: {{ recurso.cantidad_disponible }}</span>
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <label for="cantidad_{{ recurso.id }}" class="text-sm font-medium text-slate-700">Cantidad:</label>
+                        <input 
+                            type="number"
+                            id="cantidad_{{ recurso.id }}"
+                            name="cantidad_{{ recurso.id }}"
+                            min="1"
+                            max="{{ recurso.cantidad_disponible }}"
+                            disabled
+                            class="w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition disabled:cursor-not-allowed disabled:bg-slate-100"
+                            placeholder="0">
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
         </div>
 
-        
+        <div class="flex justify-end border-t border-slate-100 pt-4">
+            <button type="submit" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Crear Oferta</button>
+        </div>
     </form>
 </div>
 
 <script>
-function agregarRecurso() {
+function habilitarCantidad(checkbox) { 
+    const cantidadInput = document.getElementById( "cantidad_" + checkbox.value );
 
-    const container = document.getElementById('recursos-container');
-
-    const fila = document.createElement('div');
-
-    fila.className = 'recurso-row flex gap-3';
-
-    fila.innerHTML = `
-        <select
-            name="id_recurso"
-            required
-            class="flex-1 rounded-lg border-slate-300">
-
-            <option value="">Seleccionar recurso...</option>
-
-            {% for recurso in recursos %}
-                <option value="{{ recurso.id }}">
-                    {{ recurso.nombre }}
-                    (Disponible: {{ recurso.cantidad_disponible }})
-                </option>
-            {% endfor %}
-
-        </select>
-
-        <input
-            type="number"
-            name="cantidad"
-            min="1"
-            required
-            placeholder="Cantidad"
-            class="w-32 rounded-lg border-slate-300">
-
-        <button
-            type="button"
-            onclick="this.parentElement.remove()"
-            class="px-3 py-2 rounded-lg border border-red-200 text-red-600">
-            Eliminar
-        </button>
-    `;
-
-    container.appendChild(fila);
+    if (checkbox.checked) { 
+        cantidadInput.disabled = false; 
+        cantidadInput.required = true;
+        cantidadInput.focus(); 
+    }
+    else { 
+        cantidadInput.disabled = true;
+        cantidadInput.required = false;
+        cantidadInput.value = "";
+    }
 }
-
 </script>
 
 {% endblock %}

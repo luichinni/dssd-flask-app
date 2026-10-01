@@ -1,5 +1,6 @@
 from src.core.database import db
 from src.core.models.inventario import InventarioONG
+from src.core.models.recurso_catalogo import RecursoCatalogo
 from src.core.enums.tipo_recurso_enum import TipoRecursoEnum
 
 def listar_inventario(ong_id: int):
@@ -27,14 +28,17 @@ def crear_recurso(ong_id: int, data: dict):
     if not tipo_enum:
         tipo_enum = TipoRecursoEnum.INSUMO
 
+    catalogo = RecursoCatalogo(
+        nombre=nombre,
+        tipo_recursos=tipo_enum,
+        unidad_medida=unidad,
+        descripcion=descripcion or None,
+    )
     recurso = InventarioONG(
         ong_id=ong_id,
-        nombre=nombre,
-        tipo_recurso=tipo_enum,
-        unidad_medida=unidad,
+        recurso=catalogo,
         cantidad_total=cantidad,
-        cantidad_disponible=cantidad, # Inicialmente todo disponible
-        descripcion=descripcion,
+        cantidad_disponible=cantidad,
     )
     db.session.add(recurso)
     db.session.commit()
@@ -46,15 +50,15 @@ def actualizar_recurso(recurso_id: int, ong_id: int, data: dict):
     if not recurso:
         return None
 
-    recurso.nombre = data.get('nombre', recurso.nombre).strip()
+    recurso.recurso.nombre = data.get('nombre', recurso.nombre).strip()
     tipo_str = data.get('tipo_recurso')
     if tipo_str:
         for item in TipoRecursoEnum:
             if item.value == tipo_str or item.name == tipo_str:
-                recurso.tipo_recurso = item
+                recurso.recurso.tipo_recursos = item
                 break
 
-    recurso.unidad_medida = data.get('unidad_medida', recurso.unidad_medida).strip()
+    recurso.recurso.unidad_medida = data.get('unidad_medida', recurso.unidad_medida).strip()
     if 'cantidad_total' in data:
         nueva_total = int(data['cantidad_total'])
         diferencia = nueva_total - recurso.cantidad_total
@@ -63,7 +67,7 @@ def actualizar_recurso(recurso_id: int, ong_id: int, data: dict):
         recurso.cantidad_disponible = max(0, recurso.cantidad_disponible + diferencia)
 
     if 'descripcion' in data:
-        recurso.descripcion = data['descripcion'].strip()
+        recurso.recurso.descripcion = data['descripcion'].strip() or None
 
     db.session.commit()
     return recurso

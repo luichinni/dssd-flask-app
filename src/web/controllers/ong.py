@@ -1,10 +1,27 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
-from src.core.enums import RolEnum, TipoRecursoEnum, EstadoActividadEnum
+from src.core.enums import RolEnum, TipoRecursoEnum, EstadoActividadEnum, EstadoOfertaEnum
 from src.web.decorators.roles_required import roles_required
-from src.core.services import inventario, notificaciones, actividades
+from src.core.services import inventario, notificaciones, actividades, ofertas, emergencias, lotes
 
 ong_bp = Blueprint('ong', __name__, url_prefix='/ong')
+
+
+def _ong_id_actual():
+    ong_id = (current_user.datos_adicionales or {}).get('ong_id')
+    try:
+        return int(ong_id) if ong_id is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+@ong_bp.get('/convocatorias')
+@login_required
+@roles_required(RolEnum.ONG)
+def convocatorias_activas():
+    convocatorias = lotes.listar_convocatorias_activas()
+    return render_template('ong/convocatorias.html', convocatorias=convocatorias)
+
 
 # ==============================================================================
 # INVENTARIO
@@ -14,7 +31,10 @@ ong_bp = Blueprint('ong', __name__, url_prefix='/ong')
 @login_required
 @roles_required(RolEnum.ONG)
 def inventario_index():
-    items = inventario.listar_inventario(current_user.id)
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
+    items = inventario.listar_inventario(ong_id)
     # Contadores para resumen
     total_recursos = len(items)
     stock_total = sum(item.cantidad_total for item in items)
@@ -33,6 +53,9 @@ def inventario_index():
 @login_required
 @roles_required(RolEnum.ONG)
 def inventario_crear():
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
     if request.method == 'POST':
         nombre = request.form.get('nombre', '').strip()
         tipo_recurso = request.form.get('tipo_recurso', '')
@@ -52,7 +75,7 @@ def inventario_crear():
             flash('La cantidad debe ser un número entero mayor o igual a 0.', 'error')
             return redirect(url_for('ong.inventario_crear'))
 
-        inventario.crear_recurso(current_user.id, {
+        inventario.crear_recurso(ong_id, {
             'nombre': nombre,
             'tipo_recurso': tipo_recurso,
             'unidad_medida': unidad_medida or 'Unidades',
@@ -69,7 +92,10 @@ def inventario_crear():
 @login_required
 @roles_required(RolEnum.ONG)
 def inventario_editar(id):
-    recurso = inventario.obtener_recurso(id, current_user.id)
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
+    recurso = inventario.obtener_recurso(id, ong_id)
     if not recurso:
         flash('Recurso no encontrado.', 'error')
         return redirect(url_for('ong.inventario_index'))
@@ -93,7 +119,7 @@ def inventario_editar(id):
             flash('La cantidad debe ser un número entero mayor o igual a 0.', 'error')
             return redirect(url_for('ong.inventario_editar', id=id))
 
-        inventario.actualizar_recurso(id, current_user.id, {
+        inventario.actualizar_recurso(id, ong_id, {
             'nombre': nombre,
             'tipo_recurso': tipo_recurso,
             'unidad_medida': unidad_medida or 'Unidades',
@@ -110,7 +136,10 @@ def inventario_editar(id):
 @login_required
 @roles_required(RolEnum.ONG)
 def inventario_eliminar(id):
-    exito = inventario.eliminar_recurso(id, current_user.id)
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
+    exito = inventario.eliminar_recurso(id, ong_id)
     if exito:
         flash('Recurso eliminado del inventario.', 'info')
     else:
@@ -162,6 +191,9 @@ def notificaciones_marcar_todas():
 @login_required
 @roles_required(RolEnum.ONG)
 def actividades_index():
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
     estado_filtro = request.args.get('estado')
     enum_filtro = None
     if estado_filtro == 'en_ejecucion':
@@ -169,9 +201,9 @@ def actividades_index():
     elif estado_filtro == 'finalizada':
         enum_filtro = EstadoActividadEnum.FINALIZADA
 
-    lista = actividades.listar_actividades(current_user.id, estado=enum_filtro)
-    en_curso_cant = len([a for a in actividades.listar_actividades(current_user.id, estado=EstadoActividadEnum.EN_EJECUCION)])
-    finalizadas_cant = len([a for a in actividades.listar_actividades(current_user.id, estado=EstadoActividadEnum.FINALIZADA)])
+    lista = actividades.listar_actividades(ong_id, estado=enum_filtro)
+    en_curso_cant = len(actividades.listar_actividades(ong_id, estado=EstadoActividadEnum.EN_EJECUCION))
+    finalizadas_cant = len(actividades.listar_actividades(ong_id, estado=EstadoActividadEnum.FINALIZADA))
 
     return render_template(
         'ong/actividades/index.html',
@@ -185,7 +217,10 @@ def actividades_index():
 @login_required
 @roles_required(RolEnum.ONG)
 def actividad_finalizar(id):
-    actividad = actividades.obtener_actividad(id, current_user.id)
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
+    actividad = actividades.obtener_actividad(id, ong_id)
     if not actividad:
         flash('Actividad no encontrada.', 'error')
         return redirect(url_for('ong.actividades_index'))
@@ -204,7 +239,7 @@ def actividad_finalizar(id):
 
         actividades.finalizar_actividad(
             actividad_id=id,
-            ong_id=current_user.id,
+            ong_id=ong_id,
             informe_cierre=informe_cierre,
             recursos_utilizados=recursos_utilizados
         )
@@ -213,3 +248,219 @@ def actividad_finalizar(id):
         return redirect(url_for('ong.actividades_index'))
 
     return render_template('ong/actividades/finalizar.html', actividad=actividad)
+
+# ==============================================================================
+# OFERTAS
+# ==============================================================================
+
+@ong_bp.route('/ofertas/crear', methods=['GET', 'POST'])
+@login_required
+@roles_required(RolEnum.ONG)
+def crear_oferta():
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
+
+    convocatoria_id = request.values.get('convocatoria_id', type=int)
+    if convocatoria_id is None:
+        abort(400)
+
+    convocatoria = lotes.obtener_lote(convocatoria_id)
+    if not convocatoria or lotes.estado_lote(convocatoria) != 'publicado':
+        abort(404)
+
+    if request.method == 'POST':
+        id_emergencia = convocatoria.emergencia_id
+
+        # Recursos elegidos
+        ids_recursos = request.form.getlist(
+            'id_recurso'
+        )
+
+        recursos = []
+
+        for id_recurso in ids_recursos:
+
+            try:
+                id_recurso = int(id_recurso)
+
+                cantidad = int(
+                    request.form.get(
+                        f'cantidad_{id_recurso}',
+                        '0'
+                    )
+                )
+
+            except (TypeError, ValueError):
+
+                flash(
+                    'La cantidad de los recursos debe ser válida.',
+                    'error'
+                )
+
+                return redirect(
+                    url_for('ong.crear_oferta', convocatoria_id=convocatoria.id)
+                )
+
+            recursos.append({
+                'id_recurso': id_recurso,
+                'cantidad': cantidad
+            })
+
+        # Crear oferta
+        try:
+
+            oferta = ofertas.crear_oferta(
+                id_emergencia=id_emergencia,
+                recursos=recursos,
+                ong_id=ong_id,
+                usuario_id=current_user.id,
+            )
+
+            flash(
+                f'Oferta #{oferta.id_oferta} creada correctamente.',
+                'success'
+            )
+
+            return redirect(
+                url_for('ong.listado_ofertas')
+            )
+
+        except ValueError as e:
+
+            flash(str(e), 'error')
+
+            return redirect(
+                url_for('ong.crear_oferta', convocatoria_id=convocatoria.id)
+            )
+
+    inventario_ong = inventario.listar_inventario(ong_id)
+
+    return render_template(
+        'ofertas/crear_oferta.html',
+        inventario=inventario_ong,
+        convocatoria=convocatoria,
+    )
+
+@ong_bp.route('/ofertas/listado', methods=['GET'])
+@login_required
+@roles_required(RolEnum.ONG)
+def listado_ofertas():
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
+    lista = ofertas.listar_ofertas(ong_id)
+
+    return render_template('ofertas/listado_ofertas.html', ofertas=lista, EstadoOfertaEnum=EstadoOfertaEnum)
+
+@ong_bp.route('/ofertas/<int:id_oferta>/modificar', methods=['GET', 'POST'])
+@login_required
+@roles_required(RolEnum.ONG)
+def modificar_oferta(id_oferta):
+    ong_id = _ong_id_actual()
+    if ong_id is None:
+        abort(403)
+
+    # Obtener oferta y verificar que la ONG participe
+    try:
+
+        oferta, version_actual = (
+            ofertas.obtener_oferta_para_modificar(
+                id_oferta=id_oferta,
+                id_ong=ong_id
+            )
+        )
+
+    except ValueError as e:
+
+        flash(str(e), 'error')
+
+        return redirect(
+            url_for('ong.listado_ofertas')
+        )
+
+    if request.method == 'POST':
+
+        # Recursos elegidos
+        ids_recursos = request.form.getlist(
+            'id_recurso'
+        )
+
+        recursos = []
+
+        for id_recurso in ids_recursos:
+
+            try:
+
+                id_recurso = int(id_recurso)
+
+                cantidad = int(
+                    request.form.get(
+                        f'cantidad_{id_recurso}',
+                        '0'
+                    )
+                )
+
+            except (TypeError, ValueError):
+
+                flash(
+                    'La cantidad de los recursos debe ser válida.',
+                    'error'
+                )
+
+                return redirect(
+                    url_for(
+                        'ong.modificar_oferta',
+                        id_oferta=id_oferta
+                    )
+                )
+
+            recursos.append({
+                'id_recurso': id_recurso,
+                'cantidad': cantidad
+            })
+
+        # Modificar oferta
+        try:
+
+            oferta = ofertas.modificar_oferta(
+                id_oferta=id_oferta,
+                recursos=recursos,
+                ong_id=ong_id,
+                usuario_id=current_user.id,
+            )
+
+            flash(
+                f'Oferta #{oferta.id_oferta} modificada correctamente.',
+                'success'
+            )
+
+            return redirect(
+                url_for('ong.listado_ofertas')
+            )
+
+        except ValueError as e:
+
+            flash(str(e), 'error')
+
+            return redirect(
+                url_for(
+                    'ong.modificar_oferta',
+                    id_oferta=id_oferta
+                )
+            )
+
+    #Lo que queda con GET
+    lista_emergencias = (
+        emergencias.listar_todas_las_emergencias()
+    )
+
+    inventario_ong = inventario.listar_inventario(ong_id)
+
+    return render_template(
+        'ofertas/modificar_oferta.html',
+        oferta=oferta,
+        version_actual=version_actual,
+        emergencias=lista_emergencias,
+        inventario=inventario_ong
+    )

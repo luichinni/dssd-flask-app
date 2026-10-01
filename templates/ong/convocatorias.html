@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+
+{% block title %}Convocatorias Activas - RescueSync{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+    <header>
+        <p class="text-sm font-semibold uppercase text-emerald-700">ONG</p>
+        <h1 class="mt-1 text-2xl font-bold text-slate-900">Convocatorias Activas</h1>
+        <p class="mt-2 text-sm text-slate-600">Lotes abiertos para presentar ofertas.</p>
+    </header>
+
+    {% if convocatorias %}
+        <div class="space-y-4">
+            {% for convocatoria in convocatorias %}
+                <article class="rounded-lg border border-slate-200 bg-white p-5">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 class="font-semibold text-slate-900">Convocatoria #{{ convocatoria.id }}</h2>
+                            <p class="mt-1 text-sm text-slate-600">
+                                {{ convocatoria.emergencia.zona_afectada }} · {{ convocatoria.emergencia.tipo_desastre.value }}
+                            </p>
+                        </div>
+                        <span class="text-sm text-slate-600">
+                            Cierra {{ convocatoria.fecha_cierre_ofertas.strftime('%d/%m/%Y %H:%M UTC') }}
+                        </span>
+                    </div>
+                    <ul class="mt-4 divide-y divide-slate-100">
+                        {% for detalle in convocatoria.detalles %}
+                            <li class="py-2 text-sm text-slate-700">
+                                {{ detalle.recurso.nombre }} · solicitados: {{ detalle.cantidad_necesaria }} · mínimo: {{ detalle.cantidad_minima }}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    <a href="{{ url_for('ong.crear_oferta', convocatoria_id=convocatoria.id) }}"
+                       class="mt-4 inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700">
+                        Postular Oferta
+                    </a>
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">
+            No hay convocatorias activas en este momento.
+        </p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, abort, render_template
 from flask_login import login_required, current_user
 from src.core.services.emergencias import listar_emergencias, crear_emergencia
 from src.web.decorators.roles_required import roles_required
@@ -33,17 +33,18 @@ def new():
 @roles_required(RolEnum.OPERADOR_MUNICIPAL)
 def create():
     """Procesa el formulario para crear una nueva emergencia."""
-    
-    # Aquí iría la lógica para procesar el formulario y crear la emergencia.
-    # Por ahora, simplemente redirigimos al listado de emergencias.
+    municipio_id = (current_user.datos_adicionales or {}).get('municipio_id')
+    if municipio_id is None:
+        abort(400)
+
     crear_emergencia(
         tipo_desastre=request.form['tipo_desastre'],
         nivel_gravedad=int(request.form['nivel_gravedad']),
         zona_afectada=request.form['zona_afectada'],
-        descripcion=request.form['descripcion'],
-        reportante_id=current_user.id
+        descripcion=request.form.get('descripcion', ''),
+        reportante_id=current_user.id,
+        municipio_id=int(municipio_id),
     )
-    emergencias = listar_emergencias(current_user.id)
 
     return redirect(url_for('emergencias.index'))
 

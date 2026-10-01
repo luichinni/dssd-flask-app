@@ -43,7 +43,7 @@
                     Recursos y Personal Efectivamente Desplegados
                 </label>
                 <input type="text" id="recursos_utilizados" name="recursos_utilizados" 
-                       value="{{ actividad.recursos_utilizados or '' }}" 
+                       value="{{ actividad.recursos_utilizados.get('descripcion', '') if actividad.recursos_utilizados is mapping else (actividad.recursos_utilizados or '') }}" 
                        placeholder="Ej: 5 paramédicos, 2 ambulancias, 500 raciones entregadas"
                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-sm">
                 <p class="text-xs text-slate-500 mt-1">Detalle del personal o consumibles que retornan a la disponibilidad de la organización.</p>

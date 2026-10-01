@@ -36,6 +36,10 @@ class DetalleVersionOferta(db.Model):
             'cantidad_adjudicada >= 0 AND cantidad_adjudicada <= cantidad',
             name='chk_cantidad_adjudicada'
         ),
+        db.UniqueConstraint(
+            'id_version', 'id_ong', 'id_recurso',
+            name='uq_version_ong_recurso'
+        ),
     )
 
     def __repr__(self):

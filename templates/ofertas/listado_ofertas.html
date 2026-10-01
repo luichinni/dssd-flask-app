@@ -1,10 +1,10 @@
 {%extends "layout.html"%}
 {% block title %}Listado de Ofertas - Sistema de Emergencias Municipales{% endblock %}
-
+{% block content %}
 <div>
     <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900">Listado de Ofertas</h1>
     <p class="mt-2 text-slate-600"> Aquí puede ver todas las ofertas creadas por usted o en las que participa. </p>
-
+    
     <table class="w-full">
         <thead>
             <tr>
@@ -26,11 +26,17 @@
                 <td>{{ oferta.estado.value }}</td>
                 <td>
                     {% if oferta.es_conjunta %}
-                        Sí
+                        <!--Aparte de mostrar que sí, igual muestra el nombre de todas las ongs participantes -->
+                        {% for ong in oferta.ongs_participantes %}
+                            <span class="px-2 py-1 rounded-full bg-slate-100 text-sm">
+                                {{ ong.nombre }}
+                            </span>
+                        {% endfor %}
                     {% else %}
                         No
                     {% endif %}
                 </td>
+                <!--Listado de recursos-->
                 <td>
                     <div class="flex flex-wrap gap-2">
 
@@ -38,23 +44,17 @@
 
                             <span class="px-2 py-1 rounded-full bg-slate-100 text-sm">
                                 {{ recurso.nombre }}
+                                {{ recurso.cantidad }} 
                             </span>
 
                         {% endfor %}
 
                     </div>
                 </td>
+                <!--Otros-->
                 <td>
-                    {% if oferta.estado != EstadoOfertaEnum.PENDIENTE %}
-                        <a href="" class="text-blue-500 hover:underline">Ver detalles</a>
-                    {%endif%}
-
-                    {%if oferta.es_conjunta%}
-                        <a href="" class="text-blue-500 hover:underline">Modificar aporte</a>
-                        <a href="" class="text-blue-500 hover:underline">Salir de la oferta</a>
-                    {%else%}
-                        <a href="" class="text-blue-500 hover:underline">Modificar</a>
-                        <a href="" class="text-blue-500 hover:underline">Eliminar</a>
+                    {% if oferta.estado == EstadoOfertaEnum.PENDIENTE %}
+                        <a href="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id_oferta) }}" class="text-blue-500 hover:underline">Modificar aporte</a>
                     {%endif%}
                 </td>
             </tr>
@@ -62,5 +62,4 @@
         </tbody>
     </table>
 </div>
-
-{% block content %}
+{% endblock %}

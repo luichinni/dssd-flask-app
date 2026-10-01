@@ -47,22 +47,32 @@
                 </div>
                 <h3 class="text-lg font-bold text-slate-900 mb-1">Publicar Lotes y Donaciones</h3>
                 <p class="text-sm text-slate-600 mb-4">Gestioná y consolidá requerimientos para coordinar con las ONGs.</p>
-                <a href="#" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                <a href="{{ url_for('ccr.dashboard') }}" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
                     Gestionar Lotes &rarr;
                 </a>
             </div>
         {% endif %}
 
         {% if current_user.rol.value == 'ONG' or current_user.rol == 'ONG' %}
-            <!-- Módulo ONG -->
             <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
-                <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center font-bold text-xl mb-4">
+                <div class="w-12 h-12 bg-sky-100 text-sky-700 rounded-lg flex items-center justify-center font-bold text-xl mb-4">
+                    📋
+                </div>
+                <h3 class="text-lg font-bold text-slate-900 mb-1">Mis Ofertas</h3>
+                <p class="text-sm text-slate-600 mb-4">Consultá las ofertas presentadas por tu ONG y su estado.</p>
+                <a href="{{ url_for('ong.listado_ofertas') }}" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                    Ver mis ofertas &rarr;
+                </a>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+                <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center font-bold text-xl mb-4">
                     🤝
                 </div>
-                <h3 class="text-lg font-bold text-slate-900 mb-1">Ofrecer Ayuda</h3>
-                <p class="text-sm text-slate-600 mb-4">Revisá las solicitudes de insumos vigentes y postulate para donar o asistir.</p>
-                <a href="#" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
-                    Ver Solicitudes &rarr;
+                <h3 class="text-lg font-bold text-slate-900 mb-1">Convocatorias Activas</h3>
+                <p class="text-sm text-slate-600 mb-4">Revisá los lotes vigentes y postulá recursos disponibles de tu ONG.</p>
+                <a href="{{ url_for('ong.convocatorias_activas') }}" class="inline-flex items-center text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                    Ver convocatorias &rarr;
                 </a>
             </div>
         {% endif %}

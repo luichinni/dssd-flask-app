@@ -1,0 +1,103 @@
+{% extends "layout.html" %}
+
+{% block title %}Modificar Oferta - Sistema de Emergencias Municipales{% endblock %}
+
+{% block content %}
+
+<div class="max-w-3xl mx-auto space-y-6">
+    <div>
+        <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Ofertas</p>
+        <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-900">Modificar Oferta</h1>
+        <p class="mt-2 text-sm text-slate-600">Actualice los recursos que desea ofrecer y la cantidad disponible para cada uno.</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id_oferta) }}" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+        <!-- ID Oferta -->
+        <input type="hidden" name="id_oferta" value="{{ oferta.id_oferta }}">
+        <div>
+            <label for="id_emergencia" class="mb-1.5 block text-sm font-semibold text-slate-800">Emergencia</label>
+            <select id="id_emergencia" disabled name="id_emergencia" required class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition disabled:cursor-not-allowed disabled:bg-slate-100">
+                <option value="">Seleccionar...</option>
+                {% for emergencia in emergencias %}
+                    <option value="{{ emergencia.id }}" {% if emergencia.id == oferta.id_emergencia %}selected{% endif %}>
+                        {{ emergencia.id }} - {{ emergencia.zona_afectada }}
+                    </option>
+                {% endfor %}
+            </select>
+            <input type="hidden" name="id_emergencia" value="{{ oferta.id_emergencia }}">
+        </div>
+
+        <div>
+            <label class="mb-1.5 block text-sm font-semibold text-slate-800">Recursos ofrecidos *</label>
+            <p class="mb-4 text-sm text-slate-600">Seleccione los recursos que desea ofrecer e indique la cantidad.</p>
+            <div class="space-y-3">
+                {% for recurso in inventario %}
+                {# Busco si este recurso ya pertenece a esta oferta #}
+                    {% set detalle = namespace(valor=None) %}
+                    {% for version in oferta.versiones %}
+                        {% if version.numero_version == oferta.version_actual %}
+                            {% for d in version.detalles %}
+                                {% if d.id_recurso == recurso.id_recurso %}
+                                    {% set detalle.valor = d %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    {% endfor %}
+                    <div class="recurso-card flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 p-4">
+                        <input
+                            type="checkbox"
+                            id="recurso_{{ recurso.id }}"
+                            name="id_recurso"
+                            value="{{ recurso.id }}"
+                            class="recurso-checkbox h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            onchange="habilitarCantidad(this)"
+                            {% if detalle.valor %} checked {% endif %}
+                        >
+                        <label for="recurso_{{ recurso.id }}" class="min-w-0 flex-1 cursor-pointer">
+                            <span class="font-medium text-slate-900">{{ recurso.nombre }}</span>
+                            <span class="block text-sm text-slate-500">Disponible: {{ recurso.cantidad_disponible }}</span>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <label for="cantidad_{{ recurso.id }}" class="text-sm font-medium text-slate-700">Cantidad:</label>
+                            <input
+                                type="number"
+                                id="cantidad_{{ recurso.id }}"
+                                name="cantidad_{{ recurso.id }}"
+                                min="1"
+                                max="{{ recurso.cantidad_disponible }}"
+                                value="{% if detalle.valor %}{{ detalle.valor.cantidad }}{% endif %}"
+                                {% if not detalle.valor %}disabled{% endif %}
+                                {% if detalle.valor %}required{% endif %}
+                                class="w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition disabled:cursor-not-allowed disabled:bg-slate-100"
+                                placeholder="0"
+                            >
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="flex justify-end border-t border-slate-100 pt-4">
+            <button type="submit" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Guardar Cambios</button>
+        </div>
+    </form>
+</div>
+
+<script>
+function habilitarCantidad(checkbox) { 
+    const cantidadInput = document.getElementById( "cantidad_" + checkbox.value );
+
+    if (checkbox.checked) { 
+        cantidadInput.disabled = false; 
+        cantidadInput.required = true;
+        cantidadInput.focus(); 
+    }
+    else { 
+        cantidadInput.disabled = true;
+        cantidadInput.required = false;
+        cantidadInput.value = "";
+    }
+}
+</script>
+
+{% endblock %}
