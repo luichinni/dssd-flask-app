@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+
+{% block title %}Detalle de Emergencia - RescueSync{% endblock %}
+
+{% block content %}
+
+<div class="max-w-2xl mx-auto space-y-6">
+
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 tracking-tight">{{ emergencia.zona_afectada }}</h1>
+        <p class="text-sm text-slate-600 mt-1">{{ emergencia.descripcion }}</p>
+    </div>
+
+    <h2 class="text-lg font-semibold text-slate-900">Ofertas aceptadas</h2>
+    <p class="text-sm text-slate-500 -mt-4">Seleccioná las ofertas que quieras adjudicar para esta emergencia.</p>
+
+    {% if ofertas_con_detalle %}
+        <div class="space-y-4">
+            {% for oferta, version in ofertas_con_detalle %}
+                <div class="border border-slate-200 rounded-lg p-4 shadow-sm bg-white">
+
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-900">
+                                Oferta #{{ oferta.id_oferta }}
+                                {% if oferta.es_conjunta %}
+                                    <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 ml-2">
+                                        Consorcio
+                                    </span>
+                                {% endif %}
+                            </p>
+                            <p class="text-xs text-slate-400 mt-1">
+                                Versión {{ oferta.version_actual }} · Recibida el {{ oferta.fecha_creacion.strftime('%d/%m/%Y') }}
+                            </p>
+                        </div>
+                        <span class="inline-block text-xs font-semibold px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                            {{ oferta.estado.value }}
+                        </span>
+                    </div>
+
+                    {% if version and version.detalles %}
+                        <div class="mt-3 border-t border-slate-100 pt-3 space-y-2">
+                            {% for detalle in version.detalles %}
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-slate-700">
+                                        <span class="font-semibold">{{ detalle.ong.nombre }}</span>
+                                        ofrece {{ detalle.cantidad }} x {{ detalle.recurso.nombre }}
+                                    </span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-xs text-slate-400 mt-3 italic">
+                            No se encontraron recursos detallados para esta versión.
+                        </p>
+                    {% endif %}
+
+                    {% if version and version.observaciones %}
+                        <p class="text-xs text-slate-500 mt-3 italic">
+                            "{{ version.observaciones }}"
+                        </p>
+                    {% endif %}
+
+                    <div class="flex justify-center mt-4">
+                        <form method="POST" action="{{ url_for('emergencias.adjudicar', emergencia_id=emergencia.id, oferta_id=oferta.id) }}">
+                            <button type="submit"
+                                    class="inline-flex items-center justify-center whitespace-nowrap bg-emerald-600 text-white text-sm font-semibold px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors">
+                                Adjudicar
+                            </button>
+                        </form>
+                    </div>
+
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="border border-dashed border-slate-300 rounded-lg p-8 text-center">
+            <p class="text-sm text-slate-500">
+                Todavía no hay ofertas aceptadas para esta emergencia.
+            </p>
+        </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}
