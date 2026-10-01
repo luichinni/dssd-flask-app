@@ -3,9 +3,15 @@ from src.core.models.inventario import InventarioONG
 from src.core.models.recurso_catalogo import RecursoCatalogo
 from src.core.enums.tipo_recurso_enum import TipoRecursoEnum
 
-def listar_inventario(ong_id: int):
-    """Devuelve todo el inventario de una ONG ordenado por fecha de creación desc."""
-    return InventarioONG.query.filter_by(ong_id=ong_id).order_by(InventarioONG.created_at.desc()).all()
+def listar_inventario(ong_id: int, recurso_ids=None):
+    """Devuelve inventario propio, opcionalmente limitado a recursos solicitados."""
+    query = InventarioONG.query.filter_by(ong_id=ong_id)
+    if recurso_ids is not None:
+        recurso_ids = set(recurso_ids)
+        if not recurso_ids:
+            return []
+        query = query.filter(InventarioONG.id_recurso.in_(recurso_ids))
+    return query.order_by(InventarioONG.created_at.desc()).all()
 
 def obtener_recurso(recurso_id: int, ong_id: int):
     """Obtiene un recurso garantizando que pertenezca a la ONG especificada."""

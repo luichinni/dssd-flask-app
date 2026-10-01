@@ -4,7 +4,12 @@ from src.core.services.emergencias import listar_emergencias, crear_emergencia
 from src.web.decorators.roles_required import roles_required
 from src.core.enums import RolEnum, NivelGravedadEnum, TipoDesastreEnum
 from flask import request, redirect, url_for 
-from src.core.services.ofertas import listar_ofertas_aceptadas, obtener_version_vigente
+from src.core.services.ofertas import (
+    listar_ofertas_aceptadas,
+    listar_ofertas_adjudicadas,
+    listar_despliegues_oferta,
+    obtener_version_vigente,
+)
 from src.core.models.emergencia import Emergencia
 
 emergencies_bp = Blueprint('emergencias', __name__, url_prefix='/emergencias')
@@ -63,11 +68,21 @@ def show(emergencia_id):
         (oferta, obtener_version_vigente(oferta))
         for oferta in ofertas
     ]
+    ofertas_adjudicadas = listar_ofertas_adjudicadas(emergencia_id)
+    adjudicadas_con_detalle = [
+        (oferta, obtener_version_vigente(oferta), listar_despliegues_oferta(oferta))
+        for oferta in ofertas_adjudicadas
+    ]
 
-    return render_template('emergencies/show.html', emergencia=emergencia, ofertas_con_detalle=ofertas_con_detalle)
+    return render_template(
+        'emergencies/show.html',
+        emergencia=emergencia,
+        ofertas_con_detalle=ofertas_con_detalle,
+        adjudicadas_con_detalle=adjudicadas_con_detalle,
+    )
 
 
-from src.core.services.ofertas import listar_ofertas_aceptadas, obtener_version_vigente, adjudicar_oferta
+from src.core.services.ofertas import adjudicar_oferta
 
 @emergencies_bp.post('/<int:emergencia_id>/ofertas/<int:oferta_id>/adjudicar')
 @login_required
@@ -80,7 +95,7 @@ def adjudicar(emergencia_id, oferta_id):
         abort(403)
 
     try:
-        adjudicar_oferta(oferta_id)
+        adjudicar_oferta(oferta_id, emergencia_id=emergencia_id)
     except ValueError as e:
         # TODO: mostrar un mensaje de error al usuario (flash message) en vez de solo loguearlo
         print(f"Error al adjudicar: {e}")

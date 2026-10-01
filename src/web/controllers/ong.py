@@ -350,11 +350,13 @@ def crear_oferta():
                 url_for('ong.crear_oferta', convocatoria_id=convocatoria.id)
             )
 
-    inventario_ong = inventario.listar_inventario(ong_id)
+    recurso_ids_solicitados = {detalle.id_recurso for detalle in convocatoria.detalles}
+    inventario_ong = inventario.listar_inventario(ong_id, recurso_ids_solicitados)
 
     return render_template(
         'ofertas/crear_oferta.html',
         inventario_data=_inventario_para_formulario(inventario_ong),
+        recursos_disponibles=bool(inventario_ong),
         colaboradoras_data=_colaboradoras_para_formulario(ong_id),
         participantes_iniciales=[],
         ong_id=ong_id,
@@ -428,7 +430,12 @@ def modificar_oferta(id_oferta):
             )
 
     #Lo que queda con GET
-    inventario_ong = inventario.listar_inventario(ong_id)
+    recurso_ids_solicitados = (
+        {detalle.id_recurso for detalle in oferta.convocatoria.detalles}
+        if oferta.convocatoria is not None
+        else set()
+    )
+    inventario_ong = inventario.listar_inventario(ong_id, recurso_ids_solicitados)
     detalles_propios = {
         str(item.id): detalle.cantidad
         for detalle in version_actual.detalles
@@ -451,6 +458,7 @@ def modificar_oferta(id_oferta):
         colaboradoras_data=_colaboradoras_para_formulario(ong_id) if es_creadora else [],
         colaboradoras_actuales=colaboradoras_actuales,
         cantidades_propias=detalles_propios,
+        recursos_disponibles=bool(inventario_ong),
         es_creadora=es_creadora,
         ong_id=ong_id,
         ong_nombre=(current_user.datos_adicionales or {}).get('organizacion', current_user.nombre),
