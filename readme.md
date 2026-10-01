@@ -74,3 +74,16 @@ Si no se confirma el caso, conserva la emergencia con estado no_confirmado y
 muestra un aviso. No se reintenta automáticamente para evitar casos duplicados.
 Las emergencias preexistentes no generan casos retroactivamente.
 Aplicar flask db upgrade antes de usar este flujo.
+
+### Publicación de lotes y tareas BPM
+
+Al publicar un lote, la app completa en el caso asociado:
+Registrar emergencia (si sigue pendiente), Crear lotes de necesidades y
+Publicar convocatoria. Envía id_emergencia_input a la primera; las otras dos
+usan contratos vacíos. Las tareas se asignan al usuario configurado de Bonita;
+si están asignadas a otra persona, se informa el fallo sin reasignarlas.
+Se consultan tareas por caseId y se espera de forma acotada a que la próxima
+esté lista. Las tareas ya completadas se omiten y no se repiten POST ante fallos.
+El lote conserva bonita_estado=sincronizado o no_confirmado para investigar
+fallos parciales. La creación de lotes adicionales no repite tareas ya cerradas.
+Esto no configura el temporizador ni implementa la recepción de ofertas.

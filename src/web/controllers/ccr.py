@@ -89,7 +89,10 @@ def lotes():
         except SQLAlchemyError:
             flash('No se pudo publicar el lote. Inténtalo nuevamente.', 'error')
         else:
-            flash(f'Lote #{lote.id} publicado correctamente.', 'success')
+            if lote.bonita_estado == "sincronizado":
+                flash(f'Lote #{lote.id} publicado. Crear lotes de necesidades y Publicar convocatoria completadas en Bonita.', 'success')
+            else:
+                flash(f'Lote #{lote.id} guardado y publicado en la app, pero el avance en Bonita no quedó confirmado. Revisá el caso y los logs antes de volver a publicarlo.', 'error')
             return redirect(url_for('ccr.lotes'))
 
     default_cierre = (datetime.now(timezone.utc) + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M')

@@ -17,6 +17,7 @@ from src.core.models.recurso_catalogo import RecursoCatalogo
 from src.core.models.user import Usuario
 from src.core.models.version_oferta import VersionOferta
 from src.core.services.notificaciones import crear_notificacion
+from src.core.services.bonita import BonitaError, completar_publicacion_lote
 
 
 logger = logging.getLogger(__name__)
@@ -366,6 +367,19 @@ def publicar_lote(emergencia_id: int, detalles: list[dict],
     except Exception:
         db.session.rollback()
         raise
+    # Serializar los avances BPM de esta emergencia. El lote ya está guardado:
+    # no revertir datos locales si una llamada externa tiene resultado incierto.
+    try:
+        emergencia = Emergencia.query.filter_by(id=emergencia.id).with_for_update().one()
+        if emergencia.bonita_case_id is None:
+            raise BonitaError("La emergencia no tiene un caso Bonita confirmado.")
+        completar_publicacion_lote(emergencia.bonita_case_id, emergencia.id)
+    except BonitaError as error:
+        lote.bonita_estado = "no_confirmado"
+        logger.warning("No se confirmó la publicación del lote %s en Bonita: %s", lote.id, error)
+    else:
+        lote.bonita_estado = "sincronizado"
+    db.session.commit()
     _notificar_convocatoria(lote)
     return lote
 

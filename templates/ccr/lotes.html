@@ -49,6 +49,11 @@
                                     {% else %}
                                         <span class="rounded bg-red-50 px-2 py-1 text-xs font-semibold text-red-800">Fallido</span>
                                     {% endif %}
+                                    {% if lote.bonita_estado == 'sincronizado' %}
+                                        <div class="mt-2 text-xs text-emerald-700">Proceso actualizado</div>
+                                    {% elif lote.bonita_estado == 'no_confirmado' %}
+                                        <div class="mt-2 text-xs text-amber-700">Avance del proceso sin confirmar</div>
+                                    {% endif %}
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-xs text-slate-600">
                                     <div>Inicio: {{ lote.fecha_inicio_ofertas.strftime('%d/%m/%Y %H:%M UTC') if lote.fecha_inicio_ofertas else 'Sin publicar' }}</div>
