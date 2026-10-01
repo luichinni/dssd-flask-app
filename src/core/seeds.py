@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
-from src.core.models import Usuario, ONG, InventarioONG, RecursoCatalogo, Notificacion, ActividadONG, Emergencia, Municipio
-from src.core.enums import RolEnum, TipoRecursoEnum, TipoNotificacionEnum, EstadoActividadEnum, TipoDesastreEnum
+from src.core.models import Usuario, ONG, InventarioONG, RecursoCatalogo, Notificacion, ActividadONG, Emergencia, Municipio, Oferta, VersionOferta, DetalleVersionOferta
+from src.core.enums import RolEnum, TipoRecursoEnum, TipoNotificacionEnum, EstadoActividadEnum, TipoDesastreEnum, EstadoOfertaEnum
 from src.core.database import db
+
 
 def seed(app):
     """Función para inicializar la base de datos y cargar datos iniciales (seeding)."""
@@ -12,6 +13,8 @@ def seed(app):
         seed_municipios()
         seed_ong_data()
         seed_emergencies_data()
+        print('🌱 Seedeando datos de Ofertas...')
+        seed_ofertas_data()
         print("🌱 Finalización de la carga de datos iniciales (Seeding)!")
 
 def seed_users():
@@ -329,5 +332,97 @@ def seed_emergencies_data():
             )
             db.session.add(emergencia)
             print(f"  [+] Emergencia creada: {e_data['zona_afectada']} ({e_data['tipo_desastre'].value})")
+
+    db.session.commit()
+
+def seed_ofertas_data():
+
+    ong_usuario = Usuario.query.filter_by(email='ong@ayuda.org').first()
+    if not ong_usuario:
+        print('  [!] Usuario ONG no encontrado. Saltando seeding de Ofertas.')
+        return
+
+    ong_id = (ong_usuario.datos_adicionales or {}).get('ong_id')
+    ong_profile = db.session.get(ONG, int(ong_id)) if ong_id is not None else None
+    if not ong_profile:
+        print('  [!] Perfil de ONG no encontrado. Saltando seeding de Ofertas.')
+        return
+
+    recurso_paramedicos = RecursoCatalogo.query.filter_by(nombre='Paramédicos de Emergencia').first()
+    recurso_alimento = RecursoCatalogo.query.filter_by(nombre='Raciones de Alimento Seco').first()
+    if not recurso_paramedicos or not recurso_alimento:
+        print('  [!] Recursos base no encontrados. Saltando seeding de Ofertas.')
+        return
+
+    emergencia_terremoto = Emergencia.query.filter_by(zona_afectada='Barrio Ribereño, Quilmes').first()
+    emergencia_tormenta = Emergencia.query.filter_by(zona_afectada='Zona Forestal, La Plata').first()
+    if not emergencia_terremoto or not emergencia_tormenta:
+        print('  [!] Emergencias base no encontradas. Saltando seeding de Ofertas.')
+        return
+
+    ofertas_base = [
+        {
+            'emergencia': emergencia_terremoto,
+            'estado': EstadoOfertaEnum.ACEPTADA,
+            'es_conjunta': False,
+            'recurso': recurso_paramedicos,
+            'cantidad': 5,
+            'observaciones': 'Disponemos de 5 paramédicos certificados listos para despliegue inmediato.',
+        },
+        {
+            'emergencia': emergencia_terremoto,
+            'estado': EstadoOfertaEnum.PENDIENTE,
+            'es_conjunta': False,
+            'recurso': recurso_alimento,
+            'cantidad': 300,
+            'observaciones': 'Oferta de raciones aún en revisión por el Sistema Nacional.',
+        },
+        {
+            'emergencia': emergencia_tormenta,
+            'estado': EstadoOfertaEnum.ACEPTADA,
+            'es_conjunta': True,
+            'recurso': recurso_alimento,
+            'cantidad': 800,
+            'observaciones': 'Oferta conjunta con otra ONG de la red para cubrir la zona afectada.',
+        },
+    ]
+
+    for o_data in ofertas_base:
+        existente = Oferta.query.filter_by(
+            id_emergencia=o_data['emergencia'].id,
+            estado=o_data['estado'].value,
+        ).first()
+        if existente:
+            continue
+
+        oferta = Oferta(
+            id_emergencia=o_data['emergencia'].id,
+            estado=o_data['estado'].value,
+            version_actual=1,
+            es_conjunta=o_data['es_conjunta'],
+        )
+        db.session.add(oferta)
+        db.session.flush()  # para obtener oferta.id antes del commit
+
+        version = VersionOferta(
+            id_oferta=oferta.id,
+            numero_version=1,
+            usuario_modificacion=ong_usuario.id,
+            observaciones=o_data['observaciones'],
+            estado_versiones=o_data['estado'].value,
+        )
+        db.session.add(version)
+        db.session.flush()  # para obtener version.id
+
+        detalle = DetalleVersionOferta(
+            id_version=version.id,
+            id_ong=ong_profile.id,
+            id_recurso=o_data['recurso'].id,
+            cantidad=o_data['cantidad'],
+            cantidad_adjudicada=0,
+        )
+        db.session.add(detalle)
+
+        print(f"  [+] Oferta creada para {o_data['emergencia'].zona_afectada} - estado {o_data['estado'].value}")
 
     db.session.commit()
