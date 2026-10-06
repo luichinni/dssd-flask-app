@@ -373,7 +373,8 @@ def publicar_lote(emergencia_id: int, detalles: list[dict],
         emergencia = Emergencia.query.filter_by(id=emergencia.id).with_for_update().one()
         if emergencia.bonita_case_id is None:
             raise BonitaError("La emergencia no tiene un caso Bonita confirmado.")
-        completar_publicacion_lote(emergencia.bonita_case_id, emergencia.id)
+        #completar_publicacion_lote(emergencia.bonita_case_id, emergencia.id, lote.fecha_cierre_ofertas)
+        completar_publicacion_lote(emergencia.bonita_case_id, emergencia.id, fecha_cierre_ofertas)
     except BonitaError as error:
         lote.bonita_estado = "no_confirmado"
         logger.warning("No se confirmó la publicación del lote %s en Bonita: %s", lote.id, error)
