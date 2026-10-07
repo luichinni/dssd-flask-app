@@ -173,5 +173,5 @@ def completar_publicacion_lote(case_id, emergencia_id, fecha_cierre_ofertas):
     cliente = _ClienteBonita()
     cliente.completar(case_id, "Registrar emergencia", {"id_emergencia_input": emergencia_id})
     cliente.completar(case_id, "Crear lotes de necesidades")
-    cliente.completar(case_id, "Publicar convocatoria")
-    cliente.completar(case_id, "Cargar ofertas de ayuda", {"fecha_cierre_input": fecha_cierre_iso})
+    cliente.completar(case_id, "Publicar convocatoria", {"fecha_cierre_input": fecha_cierre_iso})
+    #cliente.completar(case_id, "Cargar ofertas de ayuda", {"fecha_cierre_input": fecha_cierre_iso})
