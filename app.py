@@ -16,6 +16,7 @@ from src.web.controllers.ong import ong_bp
 from src.web.controllers.emergencies import emergencies_bp
 from src.web.controllers.ccr import ccr_bp
 from flask_login import current_user
+from src.web.controllers.bonita_callbacks import bonita_callbacks_bp
 
 load_dotenv()
 
@@ -40,6 +41,7 @@ def create_app(env="development", static_folder="./static"):
     app.register_blueprint(ong_bp)
     app.register_blueprint(emergencies_bp)
     app.register_blueprint(ccr_bp)
+    app.register_blueprint(bonita_callbacks_bp)
     @app.context_processor
     def inject_global_data():
         if current_user.is_authenticated and hasattr(current_user, 'rol'):
