@@ -26,6 +26,17 @@ def create_app(env="development", static_folder="./static"):
 
     app.config.from_object(config[env])
 
+    # Bonita puede arrancar después de Flask; la integración vuelve a resolver
+    # el ID al crear el primer caso si esta consulta inicial no está disponible.
+    try:
+        from src.core.services.bonita import BonitaError, resolver_process_definition_id
+        with app.app_context():
+            process_id = resolver_process_definition_id()
+        app.logger.info("Definición Bonita habilitada detectada (ID %s).", process_id)
+    except BonitaError as error:
+        app.config.pop("BONITA_PROCESS_ID", None)
+        app.logger.warning("No se pudo resolver la definición Bonita al iniciar; se intentará al crear un caso: %s", error)
+
     database.init_app(app)
     migrate.init_app(app, database.db)
 
