@@ -1,5 +1,6 @@
 """Cliente REST para iniciar casos y completar tareas de Bonita."""
 import json
+import logging
 import time
 from http.cookiejar import CookieJar
 from urllib.error import HTTPError, URLError
@@ -9,6 +10,15 @@ from datetime import datetime
 from src.core.enums.accion_post_convocatoria import AccionPostOfertaEnum
 class BonitaError(RuntimeError):
     """Error de configuración, conexión o respuesta de Bonita."""
+
+    def __init__(self, mensaje, status_code=None):
+        super().__init__(mensaje)
+        self.status_code = status_code
+
+
+logger = logging.getLogger(__name__)
+PROCESS_NAME = "BestRescueSyncEver"
+PROCESS_VERSION = "1.0"
 
 
 def _id(value, nombre):
@@ -68,7 +78,7 @@ class _ClienteBonita:
         except HTTPError as error:
             status = error.code
             error.close()
-            raise BonitaError(f"Bonita respondió HTTP {status} al {etapa}.") from None
+            raise BonitaError(f"Bonita respondió HTTP {status} al {etapa}.", status_code=status) from None
         except (URLError, TimeoutError, OSError):
             detalle = " Verifica el caso antes de reintentar." if method != "GET" else ""
             raise BonitaError(f"No se pudo completar la conexión con Bonita al {etapa}.{detalle}") from None
@@ -87,6 +97,35 @@ class _ClienteBonita:
             return json.loads(response)
         except (ValueError, TypeError):
             raise BonitaError(f"Bonita devolvió JSON inválido al {etapa}. Verifica el caso antes de reintentar.") from None
+
+    def resolver_process_definition_id(self):
+        """Devuelve el ID de la única definición habilitada con nombre y versión exactos."""
+        filtros = [
+            f"name={PROCESS_NAME}",
+            f"version={PROCESS_VERSION}",
+            "activationState=ENABLED",
+        ]
+        query = urlencode([("p", 0), ("c", 100), *(("f", filtro) for filtro in filtros)])
+        definiciones = self.pedir(f"/API/bpm/process?{query}", etapa="buscar la definición del proceso")
+        if not isinstance(definiciones, list):
+            raise BonitaError("Bonita no devolvió una lista de definiciones válida.")
+
+        habilitadas = [
+            proceso for proceso in definiciones
+            if isinstance(proceso, dict)
+            and proceso.get("name") == PROCESS_NAME
+            and proceso.get("version") == PROCESS_VERSION
+            and proceso.get("activationState") == "ENABLED"
+        ]
+        if not habilitadas:
+            raise BonitaError(
+                f"No se encontró habilitado el proceso {PROCESS_NAME} versión {PROCESS_VERSION}."
+            )
+        if len(habilitadas) != 1:
+            raise BonitaError(
+                f"Bonita devolvió varias definiciones habilitadas para {PROCESS_NAME} versión {PROCESS_VERSION}."
+            )
+        return _id(habilitadas[0].get("id"), "ID de definición de proceso")
 
     def tareas(self, case_id, archivadas=False):
         resource = "archivedHumanTask" if archivadas else "humanTask"
@@ -131,21 +170,56 @@ class _ClienteBonita:
         self.pedir(f"/API/bpm/userTask/{task_id}/execution", "POST", datos or {}, f"completar {nombre}")
 
 
+def resolver_process_definition_id():
+    """Busca y almacena el ID dinámico de BestRescueSyncEver 1.0."""
+    from flask import current_app
+
+    process_id = _ClienteBonita().resolver_process_definition_id()
+    current_app.config["BONITA_PROCESS_ID"] = process_id
+    return process_id
+
+
 def iniciar_proceso(datos_contrato=None, proceso_id=None):
     """Inicia un caso y devuelve su ID; recibe entradas del contrato real.
 
-    Requiere contexto Flask. No reintenta el POST: un timeout puede haber
-    creado la instancia.
+    Para BestRescueSyncEver 1.0 resuelve el ID dinámicamente. Solo reintenta el
+    POST si Bonita devuelve HTTP 404 para una definición que quedó obsoleta;
+    nunca reintenta ante timeout, error 5xx o respuesta ambigua.
     """
     from flask import current_app
 
-    process_id = _id(proceso_id if proceso_id is not None else current_app.config.get("BONITA_PROCESS_ID"), "BONITA_PROCESS_ID")
     datos = {} if datos_contrato is None else datos_contrato
     if not isinstance(datos, dict):
         raise BonitaError("Los datos del contrato deben ser un diccionario.")
-    respuesta = _ClienteBonita().pedir(
-        f"/API/bpm/process/{process_id}/instantiation", "POST", datos, "iniciar el proceso",
-    )
+
+    cliente = _ClienteBonita()
+    dinamico = proceso_id is None
+    process_id = proceso_id
+    if dinamico:
+        process_id = current_app.config.get("BONITA_PROCESS_ID")
+        if not process_id:
+            process_id = cliente.resolver_process_definition_id()
+            current_app.config["BONITA_PROCESS_ID"] = process_id
+    process_id = _id(process_id, "ID de definición de proceso")
+
+    try:
+        respuesta = cliente.pedir(
+            f"/API/bpm/process/{process_id}/instantiation", "POST", datos, "iniciar el proceso",
+        )
+    except BonitaError as error:
+        # 404 es rechazo definitivo de esa definición. Errores de transporte,
+        # 5xx y respuestas inválidas son ambiguos y jamás disparan otro POST.
+        if not dinamico or error.status_code != 404:
+            raise
+        nuevo_id = cliente.resolver_process_definition_id()
+        if nuevo_id == process_id:
+            raise
+        current_app.config["BONITA_PROCESS_ID"] = nuevo_id
+        logger.info("La definición Bonita obsoleta se actualizó tras un redeploy.")
+        respuesta = cliente.pedir(
+            f"/API/bpm/process/{nuevo_id}/instantiation", "POST", datos, "reintentar el inicio del proceso",
+        )
+
     if not isinstance(respuesta, dict) or "caseId" not in respuesta:
         raise BonitaError("Bonita devolvió una respuesta sin caseId. Verifica los casos antes de reintentar.")
     return _id(respuesta["caseId"], "caseId")

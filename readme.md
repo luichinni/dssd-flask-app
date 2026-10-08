@@ -44,8 +44,10 @@ docker exec -it <nombre_o_id_del_contenedor> /bin/sh
 ```
 ## Inicio de procesos en Bonita
 
-Configurar las variables BONITA_* de .env.example en .env. BONITA_URL debe
-incluir /bonita y el puerto real. Si Flask se ejecuta directamente en Windows,
+Configurar BONITA_URL, BONITA_USERNAME, BONITA_PASSWORD y BONITA_TIMEOUT de
+.env.example en .env. La app busca por API la definición habilitada
+BestRescueSyncEver versión 1.0 al iniciar e inicia el caso usando su ID actual.
+BONITA_URL debe incluir /bonita y el puerto real. Si Flask se ejecuta directamente en Windows,
 usar localhost; desde el contenedor usar host.docker.internal.
 Usar un usuario de Bonita autorizado para iniciar el proceso desplegado.
 
@@ -64,14 +66,17 @@ El método inicia una sesión, conserva cookies, envía el token CSRF y devuelve
 el caseId como entero. Las entradas deben coincidir con el contrato de
 instanciación; el BPMN debe usarlas para inicializar sus variables.
 Los fallos generan BonitaError sin mostrar credenciales ni cuerpos de respuesta.
-No hay reintentos automáticos: ante un timeout o respuesta sin caseId,
-verificar los casos en Bonita antes de repetir para evitar duplicados.
+Ante un HTTP 404 por una definición obsoleta, la app busca la definición
+habilitada actual y reintenta una sola vez si el ID cambió. No reintenta ante
+timeout, errores 5xx ni respuestas sin caseId: verificar los casos en Bonita
+antes de repetir para evitar duplicados.
 
 El alta de emergencias inicia automáticamente el proceso con el contrato
 id_emergencia_init y guarda bonita_case_id. El BPMN avanza según sus transiciones
 hasta la tarea humana Registrar emergencia; la app no completa esa tarea.
 Si no se confirma el caso, conserva la emergencia con estado no_confirmado y
-muestra un aviso. No se reintenta automáticamente para evitar casos duplicados.
+muestra un aviso. Solo se repite el inicio cuando Bonita rechaza definitivamente
+con HTTP 404 una definición obsoleta; respuestas ambiguas no se repiten.
 Las emergencias preexistentes no generan casos retroactivamente.
 Aplicar flask db upgrade antes de usar este flujo.
 

@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from src.core.services.bonita import BonitaError, _ClienteBonita, completar_publicacion_lote
+from src.core.services.bonita import BonitaError, _ClienteBonita, completar_publicacion_lote, iniciar_proceso
 
 
 class TareasBonitaTests(unittest.TestCase):
@@ -51,6 +51,61 @@ class TareasBonitaTests(unittest.TestCase):
                 completar_publicacion_lote(1003, 8)
         self.assertEqual(c.completar.call_count, 2)
         self.assertEqual(c.completar.call_args_list[-1].args[1], "Crear lotes de necesidades")
+
+
+class ResolucionProcesoBonitaTests(unittest.TestCase):
+    def test_resuelve_solo_definicion_habilitada_con_nombre_y_version_exactos(self):
+        cliente = object.__new__(_ClienteBonita)
+        cliente.pedir = Mock(return_value=[
+            {"id": "7", "name": "BestRescueSyncEver", "version": "1.0", "activationState": "DISABLED"},
+            {"id": "42", "name": "BestRescueSyncEver", "version": "1.0", "activationState": "ENABLED"},
+            {"id": "99", "name": "Otro", "version": "1.0", "activationState": "ENABLED"},
+        ])
+        self.assertEqual(cliente.resolver_process_definition_id(), 42)
+        self.assertIn("activationState%3DENABLED", cliente.pedir.call_args.args[0])
+
+    def test_falla_si_no_hay_definicion_habilitada(self):
+        cliente = object.__new__(_ClienteBonita)
+        cliente.pedir = Mock(return_value=[])
+        with self.assertRaises(BonitaError):
+            cliente.resolver_process_definition_id()
+
+    def test_actualiza_id_obsoleto_y_reintenta_una_vez(self):
+        from flask import Flask
+        cliente = Mock()
+        cliente.resolver_process_definition_id.return_value = 52
+        cliente.pedir.side_effect = [BonitaError("HTTP 404", status_code=404), {"caseId": "900"}]
+        app = Flask(__name__)
+        app.config["BONITA_PROCESS_ID"] = 42
+        with app.app_context(), patch("src.core.services.bonita._ClienteBonita", return_value=cliente):
+            self.assertEqual(iniciar_proceso({"id": 1}), 900)
+        self.assertEqual(app.config["BONITA_PROCESS_ID"], 52)
+        self.assertEqual(cliente.pedir.call_count, 2)
+
+    def test_resuelve_si_el_arranque_no_dejo_id_en_cache(self):
+        from flask import Flask
+        cliente = Mock()
+        cliente.resolver_process_definition_id.return_value = 53
+        cliente.pedir.return_value = {"caseId": "901"}
+        app = Flask(__name__)
+        app.config["BONITA_PROCESS_ID"] = None
+        with app.app_context(), patch("src.core.services.bonita._ClienteBonita", return_value=cliente):
+            self.assertEqual(iniciar_proceso({"id": 2}), 901)
+        cliente.resolver_process_definition_id.assert_called_once_with()
+        self.assertEqual(app.config["BONITA_PROCESS_ID"], 53)
+        self.assertEqual(cliente.pedir.call_args.args[0], "/API/bpm/process/53/instantiation")
+
+    def test_no_reintenta_respuesta_ambigua(self):
+        from flask import Flask
+        cliente = Mock()
+        cliente.pedir.side_effect = BonitaError("respuesta ambigua", status_code=500)
+        app = Flask(__name__)
+        app.config["BONITA_PROCESS_ID"] = 42
+        with app.app_context(), patch("src.core.services.bonita._ClienteBonita", return_value=cliente):
+            with self.assertRaises(BonitaError):
+                iniciar_proceso({"id": 1})
+        self.assertEqual(cliente.pedir.call_count, 1)
+        cliente.resolver_process_definition_id.assert_not_called()
 
 
 if __name__ == "__main__":

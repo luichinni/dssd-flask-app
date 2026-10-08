@@ -8,7 +8,6 @@ class Config(object):
     BONITA_URL = environ.get("BONITA_URL", "")
     BONITA_USERNAME = environ.get("BONITA_USERNAME", "")
     BONITA_PASSWORD = environ.get("BONITA_PASSWORD", "")
-    BONITA_PROCESS_ID = environ.get("BONITA_PROCESS_ID", "")
     BONITA_TIMEOUT = environ.get("BONITA_TIMEOUT", "15")
     BONITA_CALLBACK_API_KEY = environ.get("BONITA_CALLBACK_API_KEY", "")
     TESTING = False
