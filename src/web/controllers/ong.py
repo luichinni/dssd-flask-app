@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
-from src.core.enums import RolEnum, TipoRecursoEnum, EstadoActividadEnum, EstadoOfertaEnum
+from src.core.enums import RolEnum, EstadoActividadEnum, EstadoOfertaEnum
 from src.web.decorators.roles_required import roles_required
 from src.core.services import inventario, notificaciones, actividades, ofertas, emergencias, lotes
 
@@ -99,7 +99,6 @@ def inventario_index():
         total_recursos=total_recursos,
         stock_total=stock_total,
         stock_disponible=stock_disponible,
-        tipos_recurso=TipoRecursoEnum.choices()
     )
 
 @ong_bp.route('/inventario/nuevo', methods=['GET', 'POST'])
@@ -110,36 +109,27 @@ def inventario_crear():
     if ong_id is None:
         abort(403)
     if request.method == 'POST':
-        nombre = request.form.get('nombre', '').strip()
-        tipo_recurso = request.form.get('tipo_recurso', '')
-        unidad_medida = request.form.get('unidad_medida', '').strip()
-        cantidad_total = request.form.get('cantidad_total', '0')
-        descripcion = request.form.get('descripcion', '').strip()
-
-        if not nombre:
-            flash('El nombre del recurso es obligatorio.', 'error')
-            return redirect(url_for('ong.inventario_crear'))
-
         try:
-            cantidad_int = int(cantidad_total)
-            if cantidad_int < 0:
-                raise ValueError()
-        except ValueError:
-            flash('La cantidad debe ser un número entero mayor o igual a 0.', 'error')
+            recurso = inventario.crear_recurso(ong_id, {
+                'recurso_catalogo_id': request.form.get('recurso_catalogo_id'),
+                'cantidad_total': request.form.get('cantidad_total'),
+            })
+        except ValueError as error:
+            flash(str(error), 'error')
             return redirect(url_for('ong.inventario_crear'))
 
-        inventario.crear_recurso(ong_id, {
-            'nombre': nombre,
-            'tipo_recurso': tipo_recurso,
-            'unidad_medida': unidad_medida or 'Unidades',
-            'cantidad_total': cantidad_int,
-            'descripcion': descripcion,
-        })
-
-        flash(f'Recurso "{nombre}" agregado exitosamente al inventario.', 'success')
+        flash(f'Recurso "{recurso.nombre}" agregado exitosamente al inventario.', 'success')
         return redirect(url_for('ong.inventario_index'))
 
-    return render_template('ong/inventario/form.html', modo='crear', recurso=None, tipos_recurso=TipoRecursoEnum.choices())
+    catalogo_disponible = inventario.listar_catalogo_disponible(ong_id)
+    if not catalogo_disponible:
+        flash('Ya tienes todos los recursos del catálogo en tu inventario.', 'info')
+    return render_template(
+        'ong/inventario/form.html',
+        modo='crear',
+        recurso=None,
+        catalogo_disponible=catalogo_disponible,
+    )
 
 @ong_bp.route('/inventario/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
@@ -154,36 +144,25 @@ def inventario_editar(id):
         return redirect(url_for('ong.inventario_index'))
 
     if request.method == 'POST':
-        nombre = request.form.get('nombre', '').strip()
-        tipo_recurso = request.form.get('tipo_recurso', '')
-        unidad_medida = request.form.get('unidad_medida', '').strip()
-        cantidad_total = request.form.get('cantidad_total', '0')
-        descripcion = request.form.get('descripcion', '').strip()
-
-        if not nombre:
-            flash('El nombre del recurso es obligatorio.', 'error')
-            return redirect(url_for('ong.inventario_editar', id=id))
-
         try:
-            cantidad_int = int(cantidad_total)
-            if cantidad_int < 0:
-                raise ValueError()
-        except ValueError:
-            flash('La cantidad debe ser un número entero mayor o igual a 0.', 'error')
+            inventario.actualizar_recurso(id, ong_id, {
+                'cantidad_total': request.form.get('cantidad_total'),
+            })
+        except ValueError as error:
+            flash(str(error), 'error')
             return redirect(url_for('ong.inventario_editar', id=id))
 
-        inventario.actualizar_recurso(id, ong_id, {
-            'nombre': nombre,
-            'tipo_recurso': tipo_recurso,
-            'unidad_medida': unidad_medida or 'Unidades',
-            'cantidad_total': cantidad_int,
-            'descripcion': descripcion,
-        })
-
-        flash(f'Recurso "{nombre}" actualizado correctamente.', 'success')
+        flash(f'Recurso "{recurso.nombre}" actualizado correctamente.', 'success')
         return redirect(url_for('ong.inventario_index'))
 
-    return render_template('ong/inventario/form.html', modo='editar', recurso=recurso, tipos_recurso=TipoRecursoEnum.choices())
+    cantidad_comprometida = inventario.cantidad_comprometida(ong_id, recurso.id_recurso)
+    return render_template(
+        'ong/inventario/form.html',
+        modo='editar',
+        recurso=recurso,
+        cantidad_comprometida=cantidad_comprometida,
+        minimo_cantidad=cantidad_comprometida,
+    )
 
 @ong_bp.route('/inventario/<int:id>/eliminar', methods=['POST'])
 @login_required
@@ -192,11 +171,14 @@ def inventario_eliminar(id):
     ong_id = _ong_id_actual()
     if ong_id is None:
         abort(403)
-    exito = inventario.eliminar_recurso(id, ong_id)
-    if exito:
-        flash('Recurso eliminado del inventario.', 'info')
-    else:
-        flash('No se pudo eliminar el recurso.', 'error')
+    try:
+        exito = inventario.eliminar_recurso(id, ong_id)
+        if exito:
+            flash('Recurso eliminado del inventario.', 'info')
+        else:
+            flash('No se pudo encontrar el recurso a eliminar.', 'error')
+    except ValueError as error:
+        flash(str(error), 'error')
     return redirect(url_for('ong.inventario_index'))
 
 

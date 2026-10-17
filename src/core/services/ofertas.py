@@ -19,6 +19,7 @@ from src.core.services.notificaciones import crear_notificacion
 from src.core.models.actividad import ActividadONG
 from src.core.models.notificacion import Notificacion
 from src.core.enums import EstadoActividadEnum
+from src.core.services import inventario
 
 
 def listar_ongs_colaboradoras(ong_id):
@@ -325,7 +326,7 @@ def listar_ofertas(id_ong):
 
     return resultado
 
-def _validar_recursos(recursos, id_ong, recurso_ids_permitidos=None):
+def _validar_recursos(recursos, id_ong, recurso_ids_permitidos=None, excluir_oferta_id=None):
     """
     Verifica que haya al menos un recurso, que no se repitan, cantidades válidas y que correspondan a la ONG.
     """
@@ -344,10 +345,12 @@ def _validar_recursos(recursos, id_ong, recurso_ids_permitidos=None):
 
     for recurso_data in recursos:
 
-        recurso = InventarioONG.query.filter_by(
-            id=recurso_data["id_recurso"],
-            ong_id=id_ong
-        ).first()
+        recurso = (
+            InventarioONG.query
+            .filter_by(id=recurso_data["id_recurso"], ong_id=id_ong)
+            .with_for_update()
+            .first()
+        )
 
         if recurso is None:
             raise ValueError(
@@ -364,10 +367,13 @@ def _validar_recursos(recursos, id_ong, recurso_ids_permitidos=None):
                 f"La cantidad del recurso '{recurso.nombre}' debe ser mayor a 0."
             )
 
-        if cantidad > recurso.cantidad_disponible:
+        comprometida = inventario.cantidad_comprometida(id_ong, recurso.id_recurso, excluir_oferta_id=excluir_oferta_id)
+        disponible_real = max(0, recurso.cantidad_total - comprometida)
+
+        if cantidad > disponible_real:
             raise ValueError(
                 f"No hay suficiente cantidad disponible de '{recurso.nombre}'. "
-                f"Disponible: {recurso.cantidad_disponible}."
+                f"Disponible para ofertar: {disponible_real}."
             )
 
         recursos_modelos[recurso.id] = recurso
@@ -422,7 +428,12 @@ def crear_oferta(convocatoria_id, recursos, ong_id, usuario_id, colaboradoras_id
                 cantidad=recurso_data['cantidad'],
                 cantidad_adjudicada=0,
             ))
+        db.session.flush()
+        for recurso_data in recursos:
+            inventario_item = recursos_modelos[recurso_data['id_recurso']]
+            inventario.sincronizar_disponible(inventario_item)
         _crear_participacion(oferta, ong_id, 'Aceptada')
+
         for colaboradora_id in colaboradoras_ids:
             _crear_participacion(oferta, colaboradora_id, 'Pendiente', notificar=True)
         oferta.es_conjunta = len(colaboradoras_ids) > 0
@@ -468,7 +479,7 @@ def modificar_oferta(id_oferta, recursos, ong_id, usuario_id, colaboradoras_ids=
         if oferta.convocatoria is not None
         else set()
     )
-    recursos_modelos = _validar_recursos(recursos, ong_id, recurso_ids_permitidos)
+    recursos_modelos = _validar_recursos(recursos, ong_id, recurso_ids_permitidos, excluir_oferta_id=oferta.id)
     es_creadora = oferta.creada_por_ong_id == ong_id
     if not es_creadora and colaboradoras_ids:
         raise ValueError('Solo la ONG creadora puede invitar nuevas colaboradoras.')
@@ -488,17 +499,6 @@ def modificar_oferta(id_oferta, recursos, ong_id, usuario_id, colaboradoras_ids=
                 colaboradora_id,
                 oferta_excluir_id=oferta.id,
             )
-
-    detalles_propios = [detalle for detalle in version_actual.detalles if detalle.id_ong == ong_id]
-    detalles_previos = {detalle.id_recurso: detalle for detalle in detalles_propios}
-    for recurso_data in recursos:
-        recurso = recursos_modelos[recurso_data['id_recurso']]
-        cantidad_disponible = recurso.cantidad_disponible
-        detalle_previo = detalles_previos.get(recurso.id_recurso)
-        if detalle_previo:
-            cantidad_disponible += detalle_previo.cantidad
-        if recurso_data['cantidad'] > cantidad_disponible:
-            raise ValueError(f"No hay suficiente cantidad disponible de '{recurso.nombre}'. Disponible: {cantidad_disponible}.")
 
     try:
         nuevo_num_version = oferta.version_actual + 1
@@ -536,6 +536,16 @@ def modificar_oferta(id_oferta, recursos, ong_id, usuario_id, colaboradoras_ids=
         oferta.version_actual = nuevo_num_version
         oferta.fecha_ultima_modificacion = datetime.utcnow()
         oferta.es_conjunta = OfertaParticipante.query.filter_by(oferta_id=oferta.id).count() > 1
+        db.session.flush()
+
+        recursos_afectados = {detalle.id_recurso for detalle in version_actual.detalles if detalle.id_ong == ong_id}
+        for recurso_data in recursos:
+            recursos_afectados.add(recursos_modelos[recurso_data['id_recurso']].id_recurso)
+
+        for rec_id in recursos_afectados:
+            item_inv = inventario.obtener_recurso_por_catalogo(ong_id, rec_id)
+            if item_inv:
+                inventario.sincronizar_disponible(item_inv)
 
         db.session.commit()
         return oferta
