@@ -75,6 +75,7 @@
                         <th class="px-6 py-3.5">Recurso / Insumo</th>
                         <th class="px-6 py-3.5">Categoría</th>
                         <th class="px-6 py-3.5">Stock Total</th>
+                        <th class="px-6 py-3.5">Comprometido</th>
                         <th class="px-6 py-3.5">Disponible</th>
                         <th class="px-6 py-3.5">Unidad</th>
                         <th class="px-6 py-3.5 text-right">Acciones</th>
@@ -84,13 +85,13 @@
                     {% for item in items %}
                     <tr class="hover:bg-slate-50/80 transition">
                         <td class="px-6 py-4 font-medium text-slate-900">
-                            <div>{{ item.nombre }}</div>
-                            {% if item.descripcion %}
-                            <div class="text-xs text-slate-500 font-normal mt-0.5 line-clamp-1">{{ item.descripcion }}</div>
+                            <div>{{ item.recurso.nombre }}</div>
+                            {% if item.recurso.descripcion %}
+                            <div class="text-xs text-slate-500 font-normal mt-0.5 line-clamp-1">{{ item.recurso.descripcion }}</div>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4">
-                            {% set cat = item.tipo_recurso.value if item.tipo_recurso.value is defined else item.tipo_recurso %}
+                            {% set cat = item.recurso.tipo_recursos.value if item.recurso.tipo_recursos.value is defined else item.recurso.tipo_recursos %}
                             {% if cat == 'Personal' %}
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">Personal</span>
                             {% elif cat == 'Vehículo' %}
@@ -102,8 +103,9 @@
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 font-semibold text-slate-900">{{ item.cantidad_total }}</td>
+                        <td class="px-6 py-4 font-semibold text-amber-600">{{ item.cantidad_total - item.cantidad_disponible }}</td>
                         <td class="px-6 py-4 font-semibold text-emerald-600">{{ item.cantidad_disponible }}</td>
-                        <td class="px-6 py-4 text-slate-600">{{ item.unidad_medida }}</td>
+                        <td class="px-6 py-4 text-slate-600">{{ item.recurso.unidad_medida }}</td>
                         <td class="px-6 py-4 text-right space-x-2">
                             <a href="{{ url_for('ong.inventario_editar', id=item.id) }}" class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 transition">
                                 Editar
