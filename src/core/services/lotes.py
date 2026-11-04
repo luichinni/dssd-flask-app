@@ -18,16 +18,26 @@ from src.core.models.user import Usuario
 from src.core.models.version_oferta import VersionOferta
 from src.core.services.notificaciones import crear_notificacion
 from src.core.services.bonita import BonitaError, completar_publicacion_lote
-
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
+from zoneinfo import ZoneInfo
 
+TZ_LOCAL = ZoneInfo("America/Argentina/Buenos_Aires")
+
+def _utc(fecha: datetime) -> datetime:
+    if fecha.tzinfo is None:
+        # 1. Le decimos que la hora escrita en el formulario es de Argentina
+        fecha = fecha.replace(tzinfo=TZ_LOCAL)
+    # 2. Ahora sí la convertimos al instante UTC equivalente (+3 horas reales)
+    return fecha.astimezone(timezone.utc)
+"""""
 def _utc(fecha: datetime) -> datetime:
     if fecha.tzinfo is None:
         return fecha.replace(tzinfo=timezone.utc)
     return fecha.astimezone(timezone.utc)
-
+"""""
 
 def estado_lote(lote: LoteNecesidades, ahora: datetime = None) -> str:
     """Deriva el estado operativo usando fechas y detalles ya persistidos."""
@@ -343,13 +353,20 @@ def publicar_lote(emergencia_id: int, detalles: list[dict],
         if cantidad_necesaria < 1 or min_r < 1 or min_r > cantidad_necesaria:
             raise ValueError('Las cantidades deben cumplir 1 <= min_r <= cantidad necesaria.')
         detalles_validados.append((recurso, cantidad_necesaria, min_r))
-
+    """""
     ahora = datetime.now(timezone.utc)
     if fecha_cierre_ofertas.tzinfo is None:
         fecha_cierre_ofertas = fecha_cierre_ofertas.replace(tzinfo=timezone.utc)
     if fecha_cierre_ofertas <= ahora:
         raise ValueError('La fecha de cierre debe ser posterior a la publicación.')
-
+    """""
+    ahora = datetime.now(timezone.utc)
+    # Convertimos la fecha ingresada localmente a su instante UTC real
+    fecha_cierre_ofertas = _utc(fecha_cierre_ofertas)
+    
+    if fecha_cierre_ofertas <= ahora:
+        raise ValueError('La fecha de cierre debe ser posterior a la publicación.')
+    
     try:
         lote = LoteNecesidades(
             emergencia_id=emergencia.id,
@@ -373,7 +390,8 @@ def publicar_lote(emergencia_id: int, detalles: list[dict],
         emergencia = Emergencia.query.filter_by(id=emergencia.id).with_for_update().one()
         if emergencia.bonita_case_id is None:
             raise BonitaError("La emergencia no tiene un caso Bonita confirmado.")
-        completar_publicacion_lote(emergencia.bonita_case_id, emergencia.id)
+        #completar_publicacion_lote(emergencia.bonita_case_id, emergencia.id, lote.fecha_cierre_ofertas)
+        completar_publicacion_lote(emergencia.bonita_case_id, emergencia.id, fecha_cierre_ofertas)
     except BonitaError as error:
         lote.bonita_estado = "no_confirmado"
         logger.warning("No se confirmó la publicación del lote %s en Bonita: %s", lote.id, error)
@@ -422,3 +440,17 @@ def reintentar_lote(lote_id: int, fecha_cierre_ofertas: datetime,
         db.session.rollback()
         raise
     return lote
+
+def todos_los_lotes_cubiertos(emergencia_id: int) -> bool:
+    """Verifica si todos los lotes de la emergencia tienen sus mínimos alcanzados."""
+    emergencia = db.session.get(Emergencia, emergencia_id)
+    if emergencia is None:
+        raise ValueError('La emergencia seleccionada no existe.')
+
+    cantidades = cantidades_ofertadas_por_recurso(emergencia.id)
+    for lote in emergencia.lotes:
+        if lote.detalles and lote.fecha_inicio_ofertas and lote.fecha_cierre_ofertas:
+            evaluacion = evaluar_minimos_lote(lote, cantidades)
+            if any(not item['alcanzado'] for item in evaluacion):
+                return False
+    return True

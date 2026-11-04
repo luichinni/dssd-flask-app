@@ -6,8 +6,8 @@ from http.cookiejar import CookieJar
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
-
-
+from datetime import datetime
+from src.core.enums.accion_post_convocatoria import AccionPostOfertaEnum
 class BonitaError(RuntimeError):
     """Error de configuración, conexión o respuesta de Bonita."""
 
@@ -225,8 +225,16 @@ def iniciar_proceso(datos_contrato=None, proceso_id=None):
     return _id(respuesta["caseId"], "caseId")
 
 
-def completar_publicacion_lote(case_id, emergencia_id):
-    """Avanza el caso en orden hasta completar Publicar convocatoria.
+def _iso_datetime(fecha: datetime, nombre: str) -> str:
+    """Convierte un datetime con timezone al formato que espera un contrato
+    DATE-TIME (TIME ZONE) de Bonita (ISO 8601, milisegundos, con offset)."""
+    if fecha.tzinfo is None:
+        raise BonitaError(f"{nombre} debe tener timezone (usa _utc() antes de llamar).")
+    return fecha.isoformat(timespec="milliseconds")
+
+
+def completar_publicacion_lote(case_id, emergencia_id, fecha_cierre_ofertas):
+    """Avanza el caso en orden hasta completar Cargar ofertas de ayuda.
 
     Registrar emergencia es un prerrequisito: su información ya está guardada
     en la app. Se omiten tareas archivadas como completed. Los POST de
@@ -234,7 +242,51 @@ def completar_publicacion_lote(case_id, emergencia_id):
     """
     case_id = _id(case_id, "ID del caso")
     emergencia_id = _id(emergencia_id, "ID de emergencia")
+    fecha_cierre_iso = _iso_datetime(fecha_cierre_ofertas, "fecha_cierre_ofertas")
+
     cliente = _ClienteBonita()
     cliente.completar(case_id, "Registrar emergencia", {"id_emergencia_input": emergencia_id})
     cliente.completar(case_id, "Crear lotes de necesidades")
-    cliente.completar(case_id, "Publicar convocatoria")
+    cliente.completar(case_id, "Publicar convocatoria", {"fecha_cierre_input": fecha_cierre_iso})
+    #cliente.completar(case_id, "Cargar ofertas de ayuda", {"fecha_cierre_input": fecha_cierre_iso})
+
+
+def completar_decision_post_convocatoria(case_id, decision: AccionPostOfertaEnum, nueva_fecha_cierre=None):
+    """
+    Avanza el flujo post-evaluación según la decisión del coordinador.
+    Si es REABRIR o REFORMULAR, completa el bucle hasta dejar la convocatoria
+    publicada nuevamente con su nueva fecha de cierre.
+    """
+    case_id = _id(case_id, "ID del caso")
+    if not isinstance(decision, AccionPostOfertaEnum):
+        raise BonitaError(f"decision debe ser un AccionPostOfertaEnum, recibido: {decision!r}")
+
+    cliente = _ClienteBonita()
+    
+    # 1. Completar la decisión en la tarea actual
+    cliente.completar(case_id, "Evaluar y decidir curso de acción", {
+        "accionPostOferta_input": decision.value
+    })
+
+    # 2. Si continúa, no hay más tareas en este tramo
+    if decision == AccionPostOfertaEnum.CONTINUAR:
+        return
+
+    # 3. Si reabre o reformula, se requiere la nueva fecha de cierre
+    if nueva_fecha_cierre is None:
+        raise BonitaError("Se requiere una nueva fecha de cierre para reabrir o reformular la convocatoria.")
+
+    fecha_cierre_iso = _iso_datetime(nueva_fecha_cierre, "nueva_fecha_cierre")
+
+    # Espera a que el motor de Bonita procese la compuerta y cree la siguiente tarea
+    time.sleep(1.5)
+
+    if decision == AccionPostOfertaEnum.REFORMULAR:
+        # Pasa por la tarea intermedia de reformulación
+        cliente.completar(case_id, "Reformular lotes de necesidades")
+        time.sleep(1.0)
+
+    # Ambas ramas terminan en Publicar convocatoria para fijar el temporizador
+    cliente.completar(case_id, "Publicar convocatoria", {
+        "fecha_cierre_input": fecha_cierre_iso
+    })

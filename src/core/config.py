@@ -9,6 +9,7 @@ class Config(object):
     BONITA_USERNAME = environ.get("BONITA_USERNAME", "")
     BONITA_PASSWORD = environ.get("BONITA_PASSWORD", "")
     BONITA_TIMEOUT = environ.get("BONITA_TIMEOUT", "15")
+    BONITA_CALLBACK_API_KEY = environ.get("BONITA_CALLBACK_API_KEY", "")
     TESTING = False
     SECRET_KEY= environ.get('SECRET_KEY_PASS','my_precious') # "my_precious"
     PERMANENT_SESSION_LIFETIME = timedelta(hours=1)
