@@ -22,8 +22,6 @@ from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
-from zoneinfo import ZoneInfo
-
 TZ_LOCAL = ZoneInfo("America/Argentina/Buenos_Aires")
 
 def _utc(fecha: datetime) -> datetime:

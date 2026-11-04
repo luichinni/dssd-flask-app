@@ -1,5 +1,6 @@
 """Pruebas de ejecución de tareas sin conectarse a Bonita."""
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 from src.core.services.bonita import BonitaError, _ClienteBonita, completar_publicacion_lote, iniciar_proceso
@@ -47,8 +48,9 @@ class TareasBonitaTests(unittest.TestCase):
         c = Mock()
         c.completar.side_effect = [None, BonitaError("HTTP 500")]
         with patch("src.core.services.bonita._ClienteBonita", return_value=c):
+            fecha = datetime(2026, 11, 4, 12, 0, tzinfo=timezone.utc)
             with self.assertRaises(BonitaError):
-                completar_publicacion_lote(1003, 8)
+                completar_publicacion_lote(1003, 8, fecha)
         self.assertEqual(c.completar.call_count, 2)
         self.assertEqual(c.completar.call_args_list[-1].args[1], "Crear lotes de necesidades")
 
