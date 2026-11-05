@@ -1,6 +1,6 @@
 from src.core.database import db
 from src.core.models.emergencia import Emergencia
-from src.core.services.bonita import BonitaError, iniciar_proceso
+from src.core.services.bonita import BonitaError, _ClienteBonita, iniciar_proceso
 from flask import current_app
 
 def listar_emergencias(reportante_id: int):
@@ -29,6 +29,12 @@ def crear_emergencia(tipo_desastre: str, nivel_gravedad: int, zona_afectada: str
     try:
         nueva_emergencia.bonita_case_id = iniciar_proceso(
             {"id_emergencia_init": nueva_emergencia.id}
+        )
+        # Avanzar la primer tarea donde se reciben los datos de la emergencia
+        _ClienteBonita().completar(
+            nueva_emergencia.bonita_case_id,
+            "Registrar emergencia",
+            {"id_emergencia_input": nueva_emergencia.id}
         )
     except BonitaError as error:
         nueva_emergencia.bonita_estado = "no_confirmado"

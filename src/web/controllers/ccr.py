@@ -125,6 +125,14 @@ def evaluar_convocatoria(lote_id: int):
 
     cantidades = cantidades_ofertadas_por_recurso(lote.emergencia_id)
     evaluacion = evaluar_minimos_lote(lote, cantidades)
+
+    if lote.emergencia and lote.emergencia.bonita_case_id:
+        try:
+            from src.core.services.bonita import enviar_ofertas_a_validar
+            enviar_ofertas_a_validar(lote.emergencia_id)
+        except Exception:
+            pass
+
     return render_template(
         'ccr/evaluar_convocatoria.html',
         lote=lote,
@@ -233,3 +241,18 @@ def reintentar(lote_id: int):
     else:
         flash(f'Lote #{lote.id} reintentado o reabierto correctamente.', 'success')
     return redirect(url_for('ccr.lotes'))
+@ccr_bp.post('/lotes/<int:lote_id>/validar-ofertas')
+@login_required
+@roles_required(RolEnum.CENTRO_COORDINADOR)
+def validar_ofertas_lote(lote_id: int):
+    lote = obtener_lote(lote_id)
+    if not lote or not lote.emergencia:
+        flash('La convocatoria seleccionada no existe.', 'error')
+        return redirect(url_for('ccr.lotes'))
+    try:
+        from src.core.services.bonita import enviar_ofertas_a_validar, BonitaError
+        enviar_ofertas_a_validar(lote.emergencia_id)
+        flash('Ofertas enviadas a Bonita para validacion exitosamente.', 'success')
+    except (BonitaError, ValueError) as e:
+        flash(f'Error al enviar ofertas a Bonita: {e}', 'error')
+    return redirect(url_for('ccr.evaluar_convocatoria', lote_id=lote_id))

@@ -46,7 +46,14 @@ def crear_actividad(ong_id: int, data: dict):
     return actividad
 
 def finalizar_actividad(actividad_id: int, ong_id: int, informe_cierre: str, recursos_utilizados: str = None):
-    """Marca la actividad como finalizada, guarda el informe y la fecha de cierre."""
+    """Marca la actividad como finalizada, guarda el informe y la fecha de cierre.
+    Si todas las actividades de la ONG para esa emergencia finalizaron (cierre total),
+    notifica a Bonita para liberar los recursos comprometidos.
+    """
+    import logging
+    from src.core.services.bonita import notificar_cierre_ong, BonitaError
+    logger = logging.getLogger(__name__)
+
     actividad = obtener_actividad(actividad_id, ong_id)
     if not actividad:
         return None
@@ -58,4 +65,24 @@ def finalizar_actividad(actividad_id: int, ong_id: int, informe_cierre: str, rec
         actividad.recursos_utilizados = {'descripcion': recursos_utilizados.strip()}
 
     db.session.commit()
+
+    # Si la actividad corresponde a una emergencia mediante lote_referencia, verificar cierre total
+    if actividad.lote_referencia:
+        lote = db.session.get(LoteNecesidades, actividad.lote_referencia)
+        if lote and lote.emergencia:
+            emergencia = lote.emergencia
+            lote_ids = [l.id for l in emergencia.lotes]
+            pendientes = ActividadONG.query.filter(
+                ActividadONG.ong_id == ong_id,
+                ActividadONG.lote_referencia.in_(lote_ids),
+                ActividadONG.estado != EstadoActividadEnum.FINALIZADA,
+            ).count()
+
+            if pendientes == 0 and emergencia.bonita_case_id:
+                try:
+                    notificar_cierre_ong(emergencia.bonita_case_id, ong_id)
+                    logger.info("Notificado cierre total de ONG %s para caso Bonita %s", ong_id, emergencia.bonita_case_id)
+                except BonitaError as err:
+                    logger.warning("No se pudo notificar a Bonita el fin de actividades de la ONG %s: %s", ong_id, err)
+
     return actividad

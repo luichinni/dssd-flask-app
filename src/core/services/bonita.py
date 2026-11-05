@@ -290,3 +290,136 @@ def completar_decision_post_convocatoria(case_id, decision: AccionPostOfertaEnum
     cliente.completar(case_id, "Publicar convocatoria", {
         "fecha_cierre_input": fecha_cierre_iso
     })
+def enviar_ofertas_a_validar(emergencia_id: int):
+    """Envía las ofertas de la emergencia a Bonita para su validación por competencias."""
+    from src.core.database import db
+    from src.core.models.emergencia import Emergencia
+    from src.core.models.oferta import Oferta
+    from src.core.enums import EstadoOfertaEnum
+    from src.core.services.lotes import todos_los_lotes_cubiertos
+    from src.core.services.ofertas import obtener_version_vigente
+
+    emergencia_id = _id(emergencia_id, "ID de emergencia")
+    emergencia = db.session.get(Emergencia, emergencia_id)
+    if not emergencia:
+        raise BonitaError(f"La emergencia {emergencia_id} no existe.")
+    if not emergencia.bonita_case_id:
+        raise BonitaError(f"La emergencia {emergencia_id} no tiene un caso de Bonita asociado.")
+
+    estado_rechazada = EstadoOfertaEnum.RECHAZADA.value if hasattr(EstadoOfertaEnum.RECHAZADA, 'value') else EstadoOfertaEnum.RECHAZADA
+    ofertas = (
+        Oferta.query
+        .filter(Oferta.id_emergencia == emergencia_id)
+        .filter(Oferta.estado != estado_rechazada)
+        .all()
+    )
+
+    cubiertos = todos_los_lotes_cubiertos(emergencia_id)
+
+    tipo_desastre = (
+        emergencia.tipo_desastre.name.lower()
+        if hasattr(emergencia.tipo_desastre, "name")
+        else str(emergencia.tipo_desastre).lower()
+    )
+    gravedad_map = {1: "bajo", 2: "medio", 3: "alto", 4: "critico"}
+    gravedad = gravedad_map.get(emergencia.nivel_gravedad, "medio")
+
+    ofertas_payload = []
+    for of in ofertas:
+        ver = obtener_version_vigente(of)
+        if not ver or not ver.detalles:
+            continue
+        ofertas_payload.append({
+            "id_oferta": of.id,
+            "es_conjunta": len(of.participantes) > 1,
+            "id_ong": of.id_ong,
+            "recursos": [
+                {
+                    "id_recurso": d.id_recurso,
+                    "cantidad_ofrecida": d.cantidad,
+                }
+                for d in ver.detalles
+            ]
+        })
+
+    payload_validacion = {
+        "id_emergencia": emergencia.id,
+        "tipo_desastre": tipo_desastre,
+        "gravedad": gravedad,
+        "ofertas": ofertas_payload,
+    }
+
+    cliente = _ClienteBonita()
+    cliente.completar(
+        emergencia.bonita_case_id,
+        "Validar ofertas",
+        {
+            "todosLotesCubiertos_input": cubiertos,
+            "solicitud_validacion_input": json.dumps(payload_validacion),
+        }
+    )
+
+
+def enviar_adjudicaciones_a_bonita(emergencia_id: int):
+    """Envía a Bonita las ofertas adjudicadas y cuenta la cantidad de ONGs participantes."""
+    from src.core.database import db
+    from src.core.models.emergencia import Emergencia
+    from src.core.services.ofertas import listar_ofertas_adjudicadas, obtener_version_vigente
+
+    emergencia_id = _id(emergencia_id, "ID de emergencia")
+    emergencia = db.session.get(Emergencia, emergencia_id)
+    if not emergencia:
+        raise BonitaError(f"La emergencia {emergencia_id} no existe.")
+    if not emergencia.bonita_case_id:
+        raise BonitaError(f"La emergencia {emergencia_id} no tiene un caso de Bonita asociado.")
+
+    adjudicadas = listar_ofertas_adjudicadas(emergencia_id)
+    if not adjudicadas:
+        raise BonitaError(f"No hay ofertas adjudicadas para la emergencia {emergencia_id}.")
+
+    ongs_unicas = {o.id_ong for o in adjudicadas}
+    ongs_pendientes = len(ongs_unicas)
+
+    payload_adjudicacion = {
+        "id_emergencia": emergencia.id,
+        "ofertas_adjudicadas": [
+            {
+                "id_oferta": o.id,
+                "id_ong": o.id_ong,
+                "recursos": [
+                    {
+                        "id_recurso": d.id_recurso,
+                        "cantidad_adjudicada": d.cantidad_adjudicada or d.cantidad,
+                    }
+                    for d in (obtener_version_vigente(o).detalles if obtener_version_vigente(o) else [])
+                ]
+            }
+            for o in adjudicadas
+        ]
+    }
+
+    cliente = _ClienteBonita()
+    cliente.completar(
+        emergencia.bonita_case_id,
+        "Seleccionar ofertas",
+        {
+            "ongsPendientes_input": ongs_pendientes,
+            "solicitud_adjudicacion_input": json.dumps(payload_adjudicacion),
+        }
+    )
+
+
+def notificar_cierre_ong(case_id: int, ong_id: int):
+    """Notifica a Bonita la finalización total de tareas de una ONG para liberar sus recursos."""
+    case_id = _id(case_id, "ID del caso")
+    ong_id = _id(ong_id, "ID de ONG")
+
+    cliente = _ClienteBonita()
+    cliente.completar(
+        case_id,
+        "Marcar fin de actividades",
+        {
+            "finONG": 1,
+            "id_ong_input": ong_id,
+        }
+    )

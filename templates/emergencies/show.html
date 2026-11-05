@@ -146,6 +146,14 @@
                     </article>
                 {% endfor %}
             </div>
+
+            <div class="mt-4 flex justify-end">
+                <form method="post" action="{{ url_for('emergencias.confirmar_adjudicaciones', emergencia_id=emergencia.id) }}">
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition">
+                        Confirmar y enviar adjudicaciones a Bonita
+                    </button>
+                </form>
+            </div>
         {% else %}
             <div class="rounded-lg border border-dashed border-slate-300 p-6 text-center">
                 <p class="text-sm text-slate-500">Todavía no hay ofertas adjudicadas para esta emergencia.</p>

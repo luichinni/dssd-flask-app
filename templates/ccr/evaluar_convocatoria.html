@@ -12,6 +12,13 @@
                 Emergencia #{{ lote.emergencia.id }} · {{ lote.emergencia.zona_afectada }} · {{ lote.emergencia.tipo_desastre.value }}
             </p>
         </div>
+        <div class="flex items-center gap-2">
+            <form method="post" action="{{ url_for('ccr.validar_ofertas_lote', lote_id=lote.id) }}">
+                <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition">
+                    Validar ofertas en Bonita
+                </button>
+            </form>
+        </div>
     </header>
 
     <section aria-labelledby="convocatoria-heading" class="overflow-hidden rounded-lg border border-slate-200 bg-white">

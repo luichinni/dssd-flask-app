@@ -113,3 +113,21 @@ def adjudicar(emergencia_id, oferta_id):
         print(f"Error al adjudicar: {e}")
 
     return redirect(url_for('emergencias.show', emergencia_id=emergencia_id))
+@emergencies_bp.post('/<int:emergencia_id>/confirmar-adjudicaciones')
+@login_required
+@roles_required(RolEnum.OPERADOR_MUNICIPAL)
+def confirmar_adjudicaciones(emergencia_id):
+    """Confirma las ofertas adjudicadas y las envia a Bonita para registrar el compromiso y bloqueo de recursos."""
+    emergencia = Emergencia.query.get_or_404(emergencia_id)
+
+    if emergencia.reportante_id != current_user.id:
+        abort(403)
+
+    try:
+        from src.core.services.bonita import enviar_adjudicaciones_a_bonita, BonitaError
+        enviar_adjudicaciones_a_bonita(emergencia_id)
+        flash('Adjudicaciones confirmadas y enviadas a Bonita exitosamente.', 'success')
+    except (BonitaError, ValueError) as e:
+        flash(f'Error al registrar adjudicaciones en Bonita: {e}', 'error')
+
+    return redirect(url_for('emergencias.show', emergencia_id=emergencia_id))
