@@ -53,10 +53,14 @@ def cantidad_comprometida(ong_id: int, recurso_id: int, excluir_oferta_id: int =
     return int(cantidad or 0)
 
 
+def cantidad_disponible_para_ofertar(item: InventarioONG, excluir_oferta_id: int = None) -> int:
+    comprometida = cantidad_comprometida(item.ong_id, item.id_recurso, excluir_oferta_id)
+    return max(0, item.cantidad_total - comprometida)
+
+
 def sincronizar_disponible(item: InventarioONG) -> int:
     """Actualiza la columna cantidad_disponible según total menos comprometido."""
-    comprometida = cantidad_comprometida(item.ong_id, item.id_recurso)
-    item.cantidad_disponible = max(0, item.cantidad_total - comprometida)
+    item.cantidad_disponible = cantidad_disponible_para_ofertar(item)
     return item.cantidad_disponible
 
 
