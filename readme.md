@@ -44,12 +44,21 @@ docker exec -it <nombre_o_id_del_contenedor> /bin/sh
 ```
 ## Inicio de procesos en Bonita
 
-Configurar BONITA_URL, BONITA_USERNAME, BONITA_PASSWORD y BONITA_TIMEOUT de
-.env.example en .env. La app busca por API la definición habilitada
+Copiar la configuración de Bonita de `.env.example` a `.env`. El ejemplo usa
+`123` para las cuentas de prueba del runtime local. Si cambiás una contraseña
+en Bonita, actualizá la variable correspondiente en tu `.env`.
+
+| Actor | Variables de entorno |
+| --- | --- |
+| Municipio (inicia el proceso) | `BONITA_USERNAME`, `BONITA_PASSWORD` |
+| Centro Coordinador | `BONITA_CCR_USERNAME`, `BONITA_CCR_PASSWORD` |
+| ONG | `BONITA_ONG_USERNAME`, `BONITA_ONG_PASSWORD` |
+| Sistema Nacional | `BONITA_SISTEMA_NACIONAL_USERNAME`, `BONITA_SISTEMA_NACIONAL_PASSWORD` |
+
+La app busca por API la definición habilitada
 BestRescueSyncEver versión 1.0 al iniciar e inicia el caso usando su ID actual.
 BONITA_URL debe incluir /bonita y el puerto real. Si Flask se ejecuta directamente en Windows,
 usar localhost; desde el contenedor usar host.docker.internal.
-Usar un usuario de Bonita autorizado para iniciar el proceso desplegado.
 
 El servicio se usa dentro de un contexto Flask (por ejemplo, un controlador):
 

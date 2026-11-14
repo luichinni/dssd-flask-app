@@ -367,8 +367,7 @@ def _validar_recursos(recursos, id_ong, recurso_ids_permitidos=None, excluir_ofe
                 f"La cantidad del recurso '{recurso.nombre}' debe ser mayor a 0."
             )
 
-        comprometida = inventario.cantidad_comprometida(id_ong, recurso.id_recurso, excluir_oferta_id=excluir_oferta_id)
-        disponible_real = max(0, recurso.cantidad_total - comprometida)
+        disponible_real = inventario.cantidad_disponible_para_ofertar(recurso, excluir_oferta_id)
 
         if cantidad > disponible_real:
             raise ValueError(

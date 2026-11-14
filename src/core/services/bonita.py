@@ -34,7 +34,7 @@ def _id(value, nombre):
 
 
 class _ClienteBonita:
-    def __init__(self):
+    def __init__(self, actor=None):
         from flask import current_app
 
         config = current_app.config
@@ -42,9 +42,12 @@ class _ClienteBonita:
         parsed = urlsplit(self.base_url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.query or parsed.fragment:
             raise BonitaError("Configura BONITA_URL con la URL base, incluyendo /bonita.")
-        usuario, password = config.get("BONITA_USERNAME"), config.get("BONITA_PASSWORD")
+        prefijo = f"BONITA_{actor}" if actor else "BONITA"
+        clave_usuario = f"{prefijo}_USERNAME"
+        clave_password = f"{prefijo}_PASSWORD"
+        usuario, password = config.get(clave_usuario), config.get(clave_password)
         if not usuario or not password:
-            raise BonitaError("Configura BONITA_USERNAME y BONITA_PASSWORD.")
+            raise BonitaError(f"Configura {clave_usuario} y {clave_password}.")
         try:
             self.timeout = float(config.get("BONITA_TIMEOUT", 15))
             if not 0 < self.timeout < float("inf"):
@@ -234,7 +237,7 @@ def _iso_datetime(fecha: datetime, nombre: str) -> str:
 
 
 def completar_publicacion_lote(case_id, emergencia_id, fecha_cierre_ofertas):
-    """Avanza el caso en orden hasta completar Cargar ofertas de ayuda.
+    """Avanza el caso en orden hasta publicar la convocatoria.
 
     Registrar emergencia es un prerrequisito: su información ya está guardada
     en la app. Se omiten tareas archivadas como completed. Los POST de
@@ -244,11 +247,10 @@ def completar_publicacion_lote(case_id, emergencia_id, fecha_cierre_ofertas):
     emergencia_id = _id(emergencia_id, "ID de emergencia")
     fecha_cierre_iso = _iso_datetime(fecha_cierre_ofertas, "fecha_cierre_ofertas")
 
-    cliente = _ClienteBonita()
-    cliente.completar(case_id, "Registrar emergencia", {"id_emergencia_input": emergencia_id})
+    _ClienteBonita().completar(case_id, "Registrar emergencia", {"id_emergencia_input": emergencia_id})
+    cliente = _ClienteBonita("CCR")
     cliente.completar(case_id, "Crear lotes de necesidades")
     cliente.completar(case_id, "Publicar convocatoria", {"fecha_cierre_input": fecha_cierre_iso})
-    #cliente.completar(case_id, "Cargar ofertas de ayuda", {"fecha_cierre_input": fecha_cierre_iso})
 
 
 def completar_decision_post_convocatoria(case_id, decision: AccionPostOfertaEnum, nueva_fecha_cierre=None):
@@ -261,8 +263,8 @@ def completar_decision_post_convocatoria(case_id, decision: AccionPostOfertaEnum
     if not isinstance(decision, AccionPostOfertaEnum):
         raise BonitaError(f"decision debe ser un AccionPostOfertaEnum, recibido: {decision!r}")
 
-    cliente = _ClienteBonita()
-    
+    cliente = _ClienteBonita("CCR")
+
     # 1. Completar la decisión en la tarea actual
     cliente.completar(case_id, "Evaluar y decidir curso de acción", {
         "accionPostOferta_input": decision.value
@@ -349,7 +351,7 @@ def enviar_ofertas_a_validar(emergencia_id: int):
         "ofertas": ofertas_payload,
     }
 
-    cliente = _ClienteBonita()
+    cliente = _ClienteBonita("SISTEMA_NACIONAL")
     cliente.completar(
         emergencia.bonita_case_id,
         "Validar ofertas",
@@ -414,7 +416,7 @@ def notificar_cierre_ong(case_id: int, ong_id: int):
     case_id = _id(case_id, "ID del caso")
     ong_id = _id(ong_id, "ID de ONG")
 
-    cliente = _ClienteBonita()
+    cliente = _ClienteBonita("ONG")
     cliente.completar(
         case_id,
         "Marcar fin de actividades",

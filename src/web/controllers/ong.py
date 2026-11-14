@@ -15,13 +15,13 @@ def _ong_id_actual():
         return None
 
 
-def _inventario_para_formulario(items):
+def _inventario_para_formulario(items, excluir_oferta_id=None):
     return [
         {
             'id': item.id,
             'id_recurso': item.id_recurso,
             'nombre': item.nombre,
-            'cantidad_disponible': item.cantidad_disponible,
+            'cantidad_disponible': inventario.cantidad_disponible_para_ofertar(item, excluir_oferta_id),
         }
         for item in items
     ]
@@ -436,7 +436,7 @@ def modificar_oferta(id_oferta):
         'ofertas/modificar_oferta.html',
         oferta=oferta,
         version_actual=version_actual,
-        inventario_data=_inventario_para_formulario(inventario_ong),
+        inventario_data=_inventario_para_formulario(inventario_ong, excluir_oferta_id=oferta.id),
         colaboradoras_data=_colaboradoras_para_formulario(ong_id) if es_creadora else [],
         colaboradoras_actuales=colaboradoras_actuales,
         cantidades_propias=detalles_propios,
