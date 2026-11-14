@@ -45,14 +45,16 @@ class TareasBonitaTests(unittest.TestCase):
         c.pedir.assert_not_called()
 
     def test_no_reintenta_ejecucion_ni_avanza_tras_fallo(self):
-        c = Mock()
-        c.completar.side_effect = [None, BonitaError("HTTP 500")]
-        with patch("src.core.services.bonita._ClienteBonita", return_value=c):
+        municipio = Mock()
+        coordinador = Mock()
+        coordinador.completar.side_effect = BonitaError("HTTP 500")
+        with patch("src.core.services.bonita._ClienteBonita", side_effect=[municipio, coordinador]) as cliente:
             fecha = datetime(2026, 11, 4, 12, 0, tzinfo=timezone.utc)
             with self.assertRaises(BonitaError):
                 completar_publicacion_lote(1003, 8, fecha)
-        self.assertEqual(c.completar.call_count, 2)
-        self.assertEqual(c.completar.call_args_list[-1].args[1], "Crear lotes de necesidades")
+        self.assertEqual([llamada.args for llamada in cliente.call_args_list], [(), ("CCR",)])
+        municipio.completar.assert_called_once_with(1003, "Registrar emergencia", {"id_emergencia_input": 8})
+        coordinador.completar.assert_called_once_with(1003, "Crear lotes de necesidades")
 
 
 class ResolucionProcesoBonitaTests(unittest.TestCase):
