@@ -145,6 +145,30 @@ class _ClienteBonita:
                 return result
             page += 1
 
+    def listar_tareas_archivadas_caso(self, case_id):
+        """Devuelve todas las tareas humanas archivadas de un caso."""
+        case_id = _id(case_id, "ID del caso")
+        return self.tareas(case_id, archivadas=True)
+
+    def obtener_caso_archivado(self, case_id):
+        """Devuelve el registro archivado de un caso (si ya finalizó) o None."""
+        case_id = _id(case_id, "ID del caso")
+        query = urlencode({"c": 1, "p": 0, "f": f"rootCaseId={case_id}"})
+        casos = self.pedir(f"/API/bpm/archivedCase?{query}", etapa="consultar caso archivado")
+        if isinstance(casos, list) and casos:
+            return casos[0]
+        return None
+
+    def obtener_caso_activo(self, case_id):
+        """Devuelve el caso activo en Bonita o None si no existe/ya archivado."""
+        case_id = _id(case_id, "ID del caso")
+        try:
+            return self.pedir(f"/API/bpm/case/{case_id}", etapa="consultar caso activo")
+        except BonitaError as error:
+            if error.status_code == 404:
+                return None
+            raise
+
     def completar(self, case_id, nombre, datos=None):
         """Consulta hasta que la tarea esté lista; nunca reintenta ejecución."""
         deadline = time.monotonic() + self.timeout
