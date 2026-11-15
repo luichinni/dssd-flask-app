@@ -1,0 +1,793 @@
+{% extends "layout.html" %}
+
+{% block title %}Reportes y Estadísticas - Auditor / Directivo{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Cabecera y Botones de Exportación -->
+    <header class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+            <p class="text-xs font-semibold uppercase tracking-wider text-indigo-700">Dirección / Auditoría</p>
+            <h1 class="text-2xl font-bold text-slate-900">Panel de Estadísticas e Indicadores</h1>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="exportarGet('csv')" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
+                Exportar CSV
+            </button>
+            <button type="button" onclick="exportarGet('xlsx')" class="rounded-lg border border-emerald-600 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition">
+                Exportar XLSX
+            </button>
+            <button type="button" onclick="exportarGet('json')" class="rounded-lg border border-slate-700 bg-slate-700 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition">
+                Exportar JSON
+            </button>
+            <button type="button" id="btn-export-pptx" onclick="exportarPPTX()" class="rounded-lg bg-indigo-700 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-800 transition">
+                Exportar PPTX
+            </button>
+        </div>
+    </header>
+
+    <!-- Filtros de Datos -->
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <form id="filtros-form" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6 items-end">
+            <div>
+                <label for="fecha_desde" class="block text-xs font-medium text-slate-600">Desde</label>
+                <input type="date" id="fecha_desde" name="fecha_desde" value="{{ datos.filtros_aplicados.fecha_desde }}"
+                       class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            </div>
+            <div>
+                <label for="fecha_hasta" class="block text-xs font-medium text-slate-600">Hasta</label>
+                <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ datos.filtros_aplicados.fecha_hasta }}"
+                       class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            </div>
+            <div>
+                <label for="tipo_desastre" class="block text-xs font-medium text-slate-600">Tipo de Desastre</label>
+                <select id="tipo_desastre" name="tipo_desastre" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+                    <option value="">Todos</option>
+                    {% for t in datos.opciones_filtro.tipos_desastre %}
+                        <option value="{{ t }}" {% if datos.filtros_aplicados.tipo_desastre == t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="nivel_gravedad" class="block text-xs font-medium text-slate-600">Gravedad</label>
+                <select id="nivel_gravedad" name="nivel_gravedad" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+                    <option value="">Todas</option>
+                    {% for n in datos.opciones_filtro.niveles_gravedad %}
+                        <option value="{{ n.valor }}" {% if datos.filtros_aplicados.nivel_gravedad == n.valor|string %}selected{% endif %}>{{ n.etiqueta }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="municipio_id" class="block text-xs font-medium text-slate-600">Municipio</label>
+                <select id="municipio_id" name="municipio_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+                    <option value="">Todos</option>
+                    {% for m in datos.opciones_filtro.municipios %}
+                        <option value="{{ m.id }}" {% if datos.filtros_aplicados.municipio_id == m.id|string %}selected{% endif %}>{{ m.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex gap-2">
+                <button type="submit" class="w-full rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition">
+                    Aplicar
+                </button>
+                <button type="button" onclick="limpiarFiltros()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
+                    Limpiar
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <!-- Tarjetas KPI -->
+    <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p class="text-xs font-medium text-slate-500">Emergencias</p>
+            <p id="kpi-emergencias" class="mt-1 text-2xl font-bold text-slate-900">{{ datos.kpis.total_emergencias }}</p>
+            <p id="kpi-emergencias-sub" class="mt-1 text-xs text-slate-500">{{ datos.kpis.emergencias_activas }} activas / {{ datos.kpis.emergencias_cerradas }} cerradas</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p class="text-xs font-medium text-slate-500">Suministros Movilizados</p>
+            <p id="kpi-suministros" class="mt-1 text-2xl font-bold text-indigo-700">{{ datos.kpis.total_suministros }}</p>
+            <p class="mt-1 text-xs text-slate-500">Unidades adjudicadas</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p class="text-xs font-medium text-slate-500">Resolución por Consorcios</p>
+            <p id="kpi-consorcios" class="mt-1 text-2xl font-bold text-emerald-700">{{ datos.kpis.pct_consorcios }}%</p>
+            <p id="kpi-consorcios-sub" class="mt-1 text-xs text-slate-500">{{ datos.kpis.ofertas_consorcio }} de {{ datos.kpis.ofertas_adjudicadas }} ofertas</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p class="text-xs font-medium text-slate-500">Actividades Finalizadas</p>
+            <p id="kpi-actividades" class="mt-1 text-2xl font-bold text-slate-900">{{ datos.kpis.tasa_finalizacion_actividades }}%</p>
+            <p id="kpi-actividades-sub" class="mt-1 text-xs text-slate-500">{{ datos.kpis.actividades_finalizadas }}/{{ datos.kpis.total_actividades }} ({{ datos.kpis.actividades_con_informe }} con informe)</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p class="text-xs font-medium text-slate-500">Duración Prom. Actividad</p>
+            <p id="kpi-duracion" class="mt-1 text-2xl font-bold text-amber-600">{{ datos.kpis.promedio_dias_actividad }} d</p>
+            <p class="mt-1 text-xs text-slate-500">Desde inicio hasta cierre</p>
+        </div>
+    </section>
+
+    <!-- Selector de Categorías y Vista Personalizada -->
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 mr-1">Categorías:</span>
+                <button type="button" data-cat="suministros" onclick="toggleCategoria('suministros')"
+                        class="cat-btn rounded-lg border px-3 py-1.5 text-xs font-semibold transition">
+                    Suministros y Cobertura
+                </button>
+                <button type="button" data-cat="ongs" onclick="toggleCategoria('ongs')"
+                        class="cat-btn rounded-lg border px-3 py-1.5 text-xs font-semibold transition">
+                    ONGs y Proyectos
+                </button>
+                <button type="button" data-cat="emergencias" onclick="toggleCategoria('emergencias')"
+                        class="cat-btn rounded-lg border px-3 py-1.5 text-xs font-semibold transition">
+                    Emergencias y Tiempos Bonita
+                </button>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button" onclick="seleccionarTodos()"
+                        class="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition">
+                    Seleccionar todo
+                </button>
+                <button type="button" onclick="quitarSeleccion()"
+                        class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition">
+                    Quitar selecciones
+                </button>
+                <button type="button" onclick="togglePanelPersonalizado()"
+                        class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">
+                    Vista personalizada ▾
+                </button>
+            </div>
+        </div>
+
+        <!-- Panel desplegable de selección individual -->
+        <div id="panel-personalizado" class="hidden border-t border-slate-100 pt-3">
+            <p class="mb-2 text-xs font-medium text-slate-500">Seleccioná los gráficos individuales que querés ver y exportar:</p>
+            <div id="checkboxes-graficos" class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4"></div>
+        </div>
+    </section>
+
+    <!-- Estado vacío si no hay gráficos seleccionados -->
+    <div id="empty-charts-msg" class="hidden rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
+        No hay gráficos seleccionados en la vista actual. Elegí una categoría o usá <strong>Seleccionar todo</strong> / <strong>Vista personalizada</strong>.
+    </div>
+
+    <!-- Grilla de Gráficos -->
+    <section id="charts-grid" class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <!-- 1 -->
+        <div data-card-id="chart-suministros-mes" class="chart-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Cantidad de Suministros Movilizados por Mes y Categoría</h2>
+                    <p class="text-xs text-slate-500">Evolución mensual de recursos adjudicados por tipo.</p>
+                </div>
+                <select onchange="cambiarTipoGrafico('chart-suministros-mes', this.value)" class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
+                    <option value="bar-stacked" selected>Barras apiladas</option>
+                    <option value="bar-grouped">Barras agrupadas</option>
+                    <option value="line">Líneas</option>
+                </select>
+            </div>
+            <div class="h-80"><canvas id="chart-suministros-mes"></canvas></div>
+        </div>
+
+        <!-- 2 -->
+        <div data-card-id="chart-top-recursos" class="chart-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Top Recursos Movilizados</h2>
+                    <p class="text-xs text-slate-500">Recursos con mayor volumen adjudicado en el período.</p>
+                </div>
+                <select onchange="cambiarTipoGrafico('chart-top-recursos', this.value)" class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
+                    <option value="bar-h" selected>Barras horizontales</option>
+                    <option value="bar-v">Barras verticales</option>
+                    <option value="doughnut">Dona (%)</option>
+                </select>
+            </div>
+            <div class="h-80"><canvas id="chart-top-recursos"></canvas></div>
+        </div>
+
+        <!-- 3 -->
+        <div data-card-id="chart-cobertura" class="chart-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Cobertura de Lotes: Necesario vs Mínimo vs Adjudicado</h2>
+                    <p class="text-xs text-slate-500">Comparación de demanda solicitada y adjudicación efectiva.</p>
+                </div>
+                <select onchange="cambiarTipoGrafico('chart-cobertura', this.value)" class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
+                    <option value="bar-grouped" selected>Barras agrupadas</option>
+                    <option value="bar-h">Barras horizontales</option>
+                    <option value="radar">Radar</option>
+                </select>
+            </div>
+            <div class="h-80"><canvas id="chart-cobertura"></canvas></div>
+        </div>
+
+        <!-- 4 -->
+        <div data-card-id="chart-consorcios" class="chart-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Porcentaje de Resolución mediante Consorcios de ONGs</h2>
+                    <p class="text-xs text-slate-500">Proporción de ofertas adjudicadas conjuntas vs individuales.</p>
+                </div>
+                <select onchange="cambiarTipoGrafico('chart-consorcios', this.value)" class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
+                    <option value="doughnut" selected>Dona (%)</option>
+                    <option value="pie">Torta (%)</option>
+                    <option value="bar-h">Barras horizontales</option>
+                </select>
+            </div>
+            <div class="h-80"><canvas id="chart-consorcios"></canvas></div>
+        </div>
+
+        <!-- 5 -->
+        <div data-card-id="chart-actividades" class="chart-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Estado de Actividades (Proyectos) de ONGs</h2>
+                    <p class="text-xs text-slate-500">Distribución entre actividades finalizadas y en ejecución.</p>
+                </div>
+                <select onchange="cambiarTipoGrafico('chart-actividades', this.value)" class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
+                    <option value="doughnut" selected>Dona (%)</option>
+                    <option value="pie">Torta (%)</option>
+                    <option value="bar-h">Barras horizontales</option>
+                </select>
+            </div>
+            <div class="h-80"><canvas id="chart-actividades"></canvas></div>
+        </div>
+
+        <!-- 6 -->
+        <div data-card-id="chart-bonita" class="chart-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Tiempos Promedio de Resolución por Etapa (Bonita)</h2>
+                    <p class="text-xs text-slate-500">Duración promedio en horas de cada tarea BPMN archivada.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="bonita-badge" class="rounded-full px-2.5 py-0.5 text-xs font-semibold"></span>
+                    <select onchange="cambiarTipoGrafico('chart-bonita', this.value)" class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
+                        <option value="bar-h" selected>Barras horizontales</option>
+                        <option value="bar-v">Barras verticales</option>
+                        <option value="line">Líneas</option>
+                    </select>
+                </div>
+            </div>
+            <p id="bonita-aviso" class="mb-2 hidden rounded-lg bg-amber-50 p-2 text-xs text-amber-800"></p>
+            <div class="h-80"><canvas id="chart-bonita"></canvas></div>
+        </div>
+
+        <!-- 7 -->
+        <div data-card-id="chart-tipo-gravedad" class="chart-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Emergencias por Tipo de Desastre y Gravedad</h2>
+                    <p class="text-xs text-slate-500">Cantidad de incidentes clasificados por tipo y criticidad.</p>
+                </div>
+                <select onchange="cambiarTipoGrafico('chart-tipo-gravedad', this.value)" class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
+                    <option value="bar-grouped" selected>Barras agrupadas</option>
+                    <option value="bar-stacked">Barras apiladas</option>
+                </select>
+            </div>
+            <div class="h-80"><canvas id="chart-tipo-gravedad"></canvas></div>
+        </div>
+
+        <!-- 8 -->
+        <div data-card-id="chart-municipios" class="chart-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Emergencias por Municipio</h2>
+                    <p class="text-xs text-slate-500">Localidades con mayor cantidad de emergencias registradas.</p>
+                </div>
+                <select onchange="cambiarTipoGrafico('chart-municipios', this.value)" class="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700">
+                    <option value="bar-h" selected>Barras horizontales</option>
+                    <option value="bar-v">Barras verticales</option>
+                    <option value="doughnut">Dona (%)</option>
+                </select>
+            </div>
+            <div class="h-80"><canvas id="chart-municipios"></canvas></div>
+        </div>
+    </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+const whiteBgPlugin = {
+    id: 'customCanvasBackgroundColor',
+    beforeDraw: (chart) => {
+        const { ctx } = chart;
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, chart.width, chart.height);
+        ctx.restore();
+    }
+};
+Chart.register(whiteBgPlugin, ChartDataLabels);
+
+const CHART_META = [
+    { id: 'chart-suministros-mes', key: 'suministros_mensuales', cat: 'suministros', titulo: 'Cantidad de Suministros Movilizados por Mes y Categoría', descripcion: 'Evolución mensual de recursos adjudicados agrupados por categoría.', defaultMode: 'bar-stacked' },
+    { id: 'chart-top-recursos', key: 'top_recursos', cat: 'suministros', titulo: 'Top Recursos Movilizados', descripcion: 'Recursos con mayor volumen adjudicado en el período.', defaultMode: 'bar-h' },
+    { id: 'chart-cobertura', key: 'cobertura_lotes', cat: 'suministros', titulo: 'Cobertura de Lotes: Necesario vs Mínimo vs Adjudicado', descripcion: 'Demanda solicitada frente a adjudicación efectiva por categoría.', defaultMode: 'bar-grouped' },
+    { id: 'chart-consorcios', key: 'consorcios', cat: 'ongs', titulo: 'Porcentaje de Resolución mediante Consorcios de ONGs', descripcion: 'Proporción de ofertas adjudicadas conjuntas vs individuales.', defaultMode: 'doughnut' },
+    { id: 'chart-actividades', key: 'actividades_estado', cat: 'ongs', titulo: 'Estado de Actividades (Proyectos) de ONGs', descripcion: 'Actividades finalizadas vs en ejecución.', defaultMode: 'doughnut' },
+    { id: 'chart-bonita', key: 'tiempos_bonita', cat: 'emergencias', titulo: 'Tiempos Promedio de Resolución por Etapa (Bonita)', descripcion: 'Duración promedio en horas de cada etapa BPMN.', defaultMode: 'bar-h' },
+    { id: 'chart-tipo-gravedad', key: 'emergencias_tipo_gravedad', cat: 'emergencias', titulo: 'Emergencias por Tipo de Desastre y Gravedad', descripcion: 'Distribución de emergencias por tipo y nivel de gravedad.', defaultMode: 'bar-grouped' },
+    { id: 'chart-municipios', key: 'emergencias_municipio', cat: 'emergencias', titulo: 'Emergencias por Municipio', descripcion: 'Localidades con mayor cantidad de emergencias registradas.', defaultMode: 'bar-h' }
+];
+
+const charts = {};
+const chartModes = Object.fromEntries(CHART_META.map(m => [m.id, m.defaultMode]));
+// Vista inicial limpia: primera categoría activa ("Suministros y Cobertura")
+const visibleCharts = new Set(CHART_META.filter(m => m.cat === 'suministros').map(m => m.id));
+let ultimoDatos = {{ datos | tojson }};
+const PALETTE = ['#4f46e5', '#059669', '#d97706', '#dc2626', '#0284c7', '#7c3aed', '#0d9488', '#db2777'];
+
+function wrapLabel(texto, maxLen = 20) {
+    const str = String(texto || '');
+    if (str.length <= maxLen) return str;
+    const words = str.split(' ');
+    const lines = [];
+    let current = '';
+    for (const w of words) {
+        if ((current + ' ' + w).trim().length <= maxLen) {
+            current = (current + ' ' + w).trim();
+        } else {
+            if (current) lines.push(current);
+            current = w;
+        }
+    }
+    if (current) lines.push(current);
+    return lines;
+}
+
+function pctDatalabelsConfig(mostrarPorcentaje) {
+    if (!mostrarPorcentaje) {
+        return { display: false };
+    }
+    return {
+        display: true,
+        color: '#ffffff',
+        font: { weight: 'bold', size: 12 },
+        formatter: (value, ctx) => {
+            const dataArr = ctx.chart.data.datasets[0].data || [];
+            const total = dataArr.reduce((acc, v) => acc + Number(v || 0), 0);
+            if (!total || !value) return '';
+            const pct = ((value / total) * 100).toFixed(1);
+            return `${pct}%`;
+        }
+    };
+}
+
+function labelsConPorcentaje(labels, valores) {
+    const total = valores.reduce((acc, v) => acc + Number(v || 0), 0);
+    return labels.map((lbl, idx) => {
+        const pct = total ? ((valores[idx] / total) * 100).toFixed(1) : '0.0';
+        return `${lbl} (${pct}%)`;
+    });
+}
+
+function buildChartConfig(id, datos) {
+    const mode = chartModes[id];
+    const g = datos.graficos;
+    const baseLayout = { padding: { top: 10, right: 20, bottom: 10, left: 10 } };
+
+    if (id === 'chart-suministros-mes') {
+        const isLine = mode === 'line';
+        const stacked = mode === 'bar-stacked';
+        return {
+            type: isLine ? 'line' : 'bar',
+            data: {
+                labels: g.suministros_mensuales.meses,
+                datasets: g.suministros_mensuales.categorias.map((cat, idx) => ({
+                    label: cat,
+                    data: g.suministros_mensuales.series[cat],
+                    backgroundColor: PALETTE[idx % PALETTE.length],
+                    borderColor: PALETTE[idx % PALETTE.length],
+                    tension: 0.25,
+                    fill: false
+                }))
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: baseLayout,
+                plugins: { datalabels: { display: false } },
+                scales: { x: { stacked }, y: { stacked, beginAtZero: true } }
+            }
+        };
+    }
+
+    if (id === 'chart-top-recursos') {
+        const rawLabels = g.top_recursos.map(r => `${r.nombre} (${r.unidad})`);
+        const vals = g.top_recursos.map(r => r.cantidad);
+        if (mode === 'doughnut') {
+            return {
+                type: 'doughnut',
+                data: { labels: labelsConPorcentaje(rawLabels, vals), datasets: [{ data: vals, backgroundColor: PALETTE }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, layout: baseLayout,
+                    plugins: { datalabels: pctDatalabelsConfig(true), legend: { position: 'bottom' } }
+                }
+            };
+        }
+        const isHoriz = mode === 'bar-h';
+        return {
+            type: 'bar',
+            data: {
+                labels: rawLabels.map(l => wrapLabel(l, isHoriz ? 24 : 14)),
+                datasets: [{ label: 'Cantidad Adjudicada', data: vals, backgroundColor: '#4f46e5' }]
+            },
+            options: {
+                indexAxis: isHoriz ? 'y' : 'x',
+                responsive: true, maintainAspectRatio: false, layout: baseLayout,
+                plugins: { datalabels: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { autoSkip: false } },
+                    y: { beginAtZero: true, ticks: { autoSkip: false } }
+                }
+            }
+        };
+    }
+
+    if (id === 'chart-cobertura') {
+        const datasets = [
+            { label: 'Necesaria', data: g.cobertura_lotes.necesaria, backgroundColor: '#94a3b8', borderColor: '#94a3b8' },
+            { label: 'Mínima', data: g.cobertura_lotes.minima, backgroundColor: '#f59e0b', borderColor: '#f59e0b' },
+            { label: 'Adjudicada', data: g.cobertura_lotes.adjudicada, backgroundColor: '#059669', borderColor: '#059669' }
+        ];
+        if (mode === 'radar') {
+            return {
+                type: 'radar',
+                data: {
+                    labels: g.cobertura_lotes.categorias,
+                    datasets: datasets.map(d => ({ ...d, fill: true, backgroundColor: d.borderColor + '33' }))
+                },
+                options: { responsive: true, maintainAspectRatio: false, layout: baseLayout, plugins: { datalabels: { display: false } } }
+            };
+        }
+        const isHoriz = mode === 'bar-h';
+        return {
+            type: 'bar',
+            data: { labels: g.cobertura_lotes.categorias, datasets },
+            options: {
+                indexAxis: isHoriz ? 'y' : 'x',
+                responsive: true, maintainAspectRatio: false, layout: baseLayout,
+                plugins: { datalabels: { display: false } },
+                scales: { x: { beginAtZero: true }, y: { beginAtZero: true } }
+            }
+        };
+    }
+
+    if (id === 'chart-consorcios' || id === 'chart-actividades') {
+        const src = id === 'chart-consorcios' ? g.consorcios : g.actividades_estado;
+        const colors = id === 'chart-consorcios' ? ['#059669', '#94a3b8'] : ['#4f46e5', '#f59e0b'];
+        if (mode === 'bar-h') {
+            return {
+                type: 'bar',
+                data: {
+                    labels: labelsConPorcentaje(src.etiquetas, src.valores),
+                    datasets: [{ label: 'Cantidad', data: src.valores, backgroundColor: colors }]
+                },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false, layout: baseLayout,
+                    plugins: { datalabels: { display: false } },
+                    scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } }, y: { ticks: { autoSkip: false } } }
+                }
+            };
+        }
+        return {
+            type: mode,
+            data: {
+                labels: labelsConPorcentaje(src.etiquetas, src.valores),
+                datasets: [{ data: src.valores, backgroundColor: colors }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, layout: baseLayout,
+                plugins: { datalabels: pctDatalabelsConfig(true), legend: { position: 'bottom' } }
+            }
+        };
+    }
+
+    if (id === 'chart-bonita') {
+        const etapas = g.tiempos_bonita.etapas;
+        const isLine = mode === 'line';
+        const isHoriz = mode === 'bar-h';
+        return {
+            type: isLine ? 'line' : 'bar',
+            data: {
+                labels: etapas.map(e => wrapLabel(e.etapa, isHoriz ? 24 : 14)),
+                datasets: [{ label: 'Promedio (horas)', data: etapas.map(e => e.promedio_horas), backgroundColor: '#0284c7', borderColor: '#0284c7', tension: 0.25 }]
+            },
+            options: {
+                indexAxis: isHoriz ? 'y' : 'x',
+                responsive: true, maintainAspectRatio: false, layout: baseLayout,
+                plugins: { datalabels: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { autoSkip: false } },
+                    y: { beginAtZero: true, ticks: { autoSkip: false } }
+                }
+            }
+        };
+    }
+
+    if (id === 'chart-tipo-gravedad') {
+        const stacked = mode === 'bar-stacked';
+        return {
+            type: 'bar',
+            data: {
+                labels: g.emergencias_tipo_gravedad.tipos.map(t => wrapLabel(t, 14)),
+                datasets: g.emergencias_tipo_gravedad.niveles.map((niv, idx) => ({
+                    label: niv,
+                    data: g.emergencias_tipo_gravedad.series[niv],
+                    backgroundColor: ['#22c55e', '#eab308', '#f97316', '#dc2626'][idx]
+                }))
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, layout: baseLayout,
+                plugins: { datalabels: { display: false } },
+                scales: { x: { stacked, ticks: { autoSkip: false } }, y: { stacked, beginAtZero: true, ticks: { stepSize: 1 } } }
+            }
+        };
+    }
+
+    if (id === 'chart-municipios') {
+        const rawLabels = g.emergencias_municipio.map(m => m.municipio);
+        const vals = g.emergencias_municipio.map(m => m.cantidad);
+        if (mode === 'doughnut') {
+            return {
+                type: 'doughnut',
+                data: { labels: labelsConPorcentaje(rawLabels, vals), datasets: [{ data: vals, backgroundColor: PALETTE }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, layout: baseLayout,
+                    plugins: { datalabels: pctDatalabelsConfig(true), legend: { position: 'bottom' } }
+                }
+            };
+        }
+        const isHoriz = mode === 'bar-h';
+        return {
+            type: 'bar',
+            data: {
+                labels: rawLabels.map(l => wrapLabel(l, isHoriz ? 24 : 14)),
+                datasets: [{ label: 'Emergencias', data: vals, backgroundColor: '#7c3aed' }]
+            },
+            options: {
+                indexAxis: isHoriz ? 'y' : 'x',
+                responsive: true, maintainAspectRatio: false, layout: baseLayout,
+                plugins: { datalabels: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { stepSize: 1, autoSkip: false } },
+                    y: { beginAtZero: true, ticks: { stepSize: 1, autoSkip: false } }
+                }
+            }
+        };
+    }
+}
+
+function renderSingleChart(id, datos) {
+    if (charts[id]) charts[id].destroy();
+    const ctx = document.getElementById(id).getContext('2d');
+    charts[id] = new Chart(ctx, buildChartConfig(id, datos));
+}
+
+function cambiarTipoGrafico(id, mode) {
+    chartModes[id] = mode;
+    if (visibleCharts.has(id)) {
+        renderSingleChart(id, ultimoDatos);
+    }
+}
+
+function syncViewUI() {
+    // Mostrar/ocultar cards
+    document.querySelectorAll('.chart-card').forEach(card => {
+        const id = card.getAttribute('data-card-id');
+        if (visibleCharts.has(id)) {
+            card.classList.remove('hidden');
+            renderSingleChart(id, ultimoDatos);
+        } else {
+            card.classList.add('hidden');
+        }
+    });
+
+    // Estado vacío
+    document.getElementById('empty-charts-msg').classList.toggle('hidden', visibleCharts.size > 0);
+
+    // Sincronizar botones de categoría
+    document.querySelectorAll('.cat-btn').forEach(btn => {
+        const cat = btn.getAttribute('data-cat');
+        const catIds = CHART_META.filter(m => m.cat === cat).map(m => m.id);
+        const allOn = catIds.every(id => visibleCharts.has(id));
+        const someOn = catIds.some(id => visibleCharts.has(id));
+        if (allOn) {
+            btn.className = 'cat-btn rounded-lg border border-indigo-600 bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition';
+        } else if (someOn) {
+            btn.className = 'cat-btn rounded-lg border border-indigo-400 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition';
+        } else {
+            btn.className = 'cat-btn rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition';
+        }
+    });
+
+    // Sincronizar checkboxes individuales
+    CHART_META.forEach(m => {
+        const cb = document.getElementById(`cb-${m.id}`);
+        if (cb) cb.checked = visibleCharts.has(m.id);
+    });
+}
+
+function toggleCategoria(cat) {
+    const catIds = CHART_META.filter(m => m.cat === cat).map(m => m.id);
+    const allOn = catIds.every(id => visibleCharts.has(id));
+    if (allOn) {
+        catIds.forEach(id => visibleCharts.delete(id));
+    } else {
+        catIds.forEach(id => visibleCharts.add(id));
+    }
+    syncViewUI();
+}
+
+function seleccionarTodos() {
+    CHART_META.forEach(m => visibleCharts.add(m.id));
+    syncViewUI();
+}
+
+function quitarSeleccion() {
+    visibleCharts.clear();
+    syncViewUI();
+}
+
+function togglePanelPersonalizado() {
+    document.getElementById('panel-personalizado').classList.toggle('hidden');
+}
+
+function initCheckboxesPersonalizados() {
+    const cont = document.getElementById('checkboxes-graficos');
+    cont.innerHTML = '';
+    CHART_META.forEach(m => {
+        const label = document.createElement('label');
+        label.className = 'flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 cursor-pointer hover:bg-slate-50';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.id = `cb-${m.id}`;
+        cb.checked = visibleCharts.has(m.id);
+        cb.className = 'rounded text-indigo-600';
+        cb.addEventListener('change', () => {
+            if (cb.checked) visibleCharts.add(m.id);
+            else visibleCharts.delete(m.id);
+            syncViewUI();
+        });
+        const span = document.createElement('span');
+        span.textContent = m.titulo;
+        label.append(cb, span);
+        cont.appendChild(label);
+    });
+}
+
+function renderDashboard(datos) {
+    ultimoDatos = datos;
+    const k = datos.kpis;
+    document.getElementById('kpi-emergencias').textContent = k.total_emergencias;
+    document.getElementById('kpi-emergencias-sub').textContent = `${k.emergencias_activas} activas / ${k.emergencias_cerradas} cerradas`;
+    document.getElementById('kpi-suministros').textContent = k.total_suministros;
+    document.getElementById('kpi-consorcios').textContent = `${k.pct_consorcios}%`;
+    document.getElementById('kpi-consorcios-sub').textContent = `${k.ofertas_consorcio} de ${k.ofertas_adjudicadas} ofertas`;
+    document.getElementById('kpi-actividades').textContent = `${k.tasa_finalizacion_actividades}%`;
+    document.getElementById('kpi-actividades-sub').textContent = `${k.actividades_finalizadas}/${k.total_actividades} (${k.actividades_con_informe} con informe)`;
+    document.getElementById('kpi-duracion').textContent = `${k.promedio_dias_actividad} d`;
+
+    const bon = datos.graficos.tiempos_bonita;
+    const badge = document.getElementById('bonita-badge');
+    const aviso = document.getElementById('bonita-aviso');
+    if (bon.bonita_disponible) {
+        badge.textContent = `Conectado (${bon.casos_consultados} casos)`;
+        badge.className = 'rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800';
+        aviso.classList.add('hidden');
+    } else if (bon.es_demo) {
+        badge.textContent = `Demo (${bon.casos_consultados} casos)`;
+        badge.className = 'rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800';
+        aviso.textContent = bon.motivo || 'Mostrando datos simulados.';
+        aviso.classList.remove('hidden');
+    } else {
+        badge.textContent = 'Sin datos en vivo';
+        badge.className = 'rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800';
+        aviso.textContent = bon.motivo || 'Bonita no disponible.';
+        aviso.classList.remove('hidden');
+    }
+
+    syncViewUI();
+}
+
+function getFiltrosParams() {
+    const form = document.getElementById('filtros-form');
+    const data = new FormData(form);
+    const params = new URLSearchParams();
+    for (const [k, v] of data.entries()) {
+        if (v) params.set(k, v);
+    }
+    return params;
+}
+
+function getFiltrosObj() {
+    const obj = {};
+    for (const [k, v] of getFiltrosParams().entries()) {
+        obj[k] = v;
+    }
+    return obj;
+}
+
+function getVisibleKeys() {
+    return CHART_META.filter(m => visibleCharts.has(m.id)).map(m => m.key);
+}
+
+async function recargarDatos() {
+    const qs = getFiltrosParams().toString();
+    const res = await fetch(`{{ url_for('auditor.reportes_data') }}${qs ? '?' + qs : ''}`);
+    if (res.ok) {
+        const datos = await res.json();
+        renderDashboard(datos);
+    }
+}
+
+function exportarGet(formato) {
+    const visibleKeys = getVisibleKeys();
+    if (visibleKeys.length === 0) {
+        alert('Seleccioná al menos un gráfico para exportar.');
+        return;
+    }
+    const params = getFiltrosParams();
+    params.set('graficos', visibleKeys.join(','));
+    window.location.href = `/auditor/reportes/export/${formato}?${params.toString()}`;
+}
+
+async function exportarPPTX() {
+    const visibleMeta = CHART_META.filter(m => visibleCharts.has(m.id));
+    if (visibleMeta.length === 0) {
+        alert('Seleccioná al menos un gráfico para exportar.');
+        return;
+    }
+    const btn = document.getElementById('btn-export-pptx');
+    btn.disabled = true;
+    btn.textContent = 'Generando PPTX...';
+    try {
+        const imagenes = visibleMeta.map(meta => {
+            const ch = charts[meta.id];
+            return {
+                id: meta.id,
+                titulo: meta.titulo,
+                descripcion: meta.descripcion,
+                data_url: ch ? ch.toBase64Image('image/png', 1.0) : ''
+            };
+        }).filter(i => i.data_url);
+
+        const res = await fetch(`{{ url_for('auditor.export_pptx') }}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filtros: getFiltrosObj(), imagenes })
+        });
+        if (!res.ok) throw new Error('Error al generar PPTX');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'reporte_auditor.pptx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Exportar PPTX';
+    }
+}
+
+function limpiarFiltros() {
+    document.getElementById('filtros-form').reset();
+    recargarDatos();
+}
+
+document.getElementById('filtros-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    recargarDatos();
+});
+
+initCheckboxesPersonalizados();
+renderDashboard(ultimoDatos);
+</script>
+{% endblock %}
