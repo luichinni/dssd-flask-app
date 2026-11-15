@@ -15,7 +15,15 @@ from src.core.models import (
     DetalleVersionOferta,
     OfertaParticipante,
 )
-from src.core.enums import RolEnum, TipoRecursoEnum, TipoNotificacionEnum, EstadoActividadEnum, TipoDesastreEnum, EstadoOfertaEnum
+from src.core.enums import (
+    RolEnum,
+    TipoRecursoEnum,
+    TipoNotificacionEnum,
+    EstadoActividadEnum,
+    TipoDesastreEnum,
+    EstadoOfertaEnum,
+    NivelGravedadEnum,
+)
 from src.core.database import db
 
 
@@ -32,6 +40,7 @@ def seed(app):
         seed_ccr_data()
         seed_ofertas_data()
         seed_oferta_colaborativa_data()
+        seed_reportes_historico()
         print("🌱 Finalización de la carga de datos iniciales (Seeding)!")
 
 def seed_users():
@@ -798,3 +807,254 @@ def seed_oferta_colaborativa_data():
         notificacion.leida = False
 
     db.session.commit()
+
+
+def seed_reportes_historico():
+    """Carga datos históricos idempotentes de emergencias, ofertas, consorcios y actividades para reportes."""
+    print('🌱 Seedeando histórico para reportes de Auditoría/Dirección...')
+
+    operador = Usuario.query.filter_by(email='operador@municipio.gob.ar').first()
+    ong_principal = ONG.query.filter_by(nombre='Red de Apoyo Comunitario').first()
+    ong_colab = ONG.query.filter_by(nombre='Brigada Humanitaria Federal').first()
+    if not (operador and ong_principal and ong_colab):
+        print('  [!] Faltan usuarios/ONGs base para seed_reportes_historico.')
+        return
+
+    ong_extra = ONG.query.filter_by(nombre='Cruz Verde Solidaria').first()
+    if not ong_extra:
+        ong_extra = ONG(nombre='Cruz Verde Solidaria', descripcion='ONG de respuesta rápida y logística')
+        db.session.add(ong_extra)
+        db.session.flush()
+
+    municipios_seed = [
+        ('La Plata', 'Buenos Aires'),
+        ('Bahía Blanca', 'Buenos Aires'),
+        ('Córdoba Capital', 'Córdoba'),
+        ('Rosario', 'Santa Fe'),
+    ]
+    municipios_map = {}
+    for nombre, provincia in municipios_seed:
+        muni = Municipio.query.filter_by(nombre=nombre, provincia=provincia).first()
+        if not muni:
+            muni = Municipio(nombre=nombre, provincia=provincia)
+            db.session.add(muni)
+            db.session.flush()
+        municipios_map[nombre] = muni
+
+    recursos = {
+        r.nombre: r
+        for r in RecursoCatalogo.query.all()
+    }
+    if not recursos:
+        print('  [!] No hay recursos en catálogo. Saltando seed_reportes_historico.')
+        return
+
+    ahora = datetime.now(timezone.utc)
+    escenarios = [
+        {
+            'zona': '[HIST] Cuenca Arroyo El Gato - La Plata',
+            'tipo': TipoDesastreEnum.hidrologico,
+            'gravedad': NivelGravedadEnum.ALTO.value,
+            'municipio': 'La Plata',
+            'dias_atras': 120,
+            'bonita_estado': 'finalizada',
+            'es_conjunta': True,
+            'estado_oferta': EstadoOfertaEnum.ADJUDICADA,
+            'detalles_lote': [
+                ('Raciones de Alimento Seco', 1200, 800, 1200),
+                ('Carpas Sanitarias de Campaña', 4, 2, 4),
+            ],
+            'actividades': [
+                (ong_principal.id, '[HIST] Despliegue sanitario El Gato', EstadoActividadEnum.FINALIZADA, 118, 110, 'Cobertura total de evacuados sin novedades.'),
+                (ong_colab.id, '[HIST] Distribución raciones El Gato', EstadoActividadEnum.FINALIZADA, 117, 111, 'Entregadas 1200 raciones en 3 centros.'),
+            ],
+        },
+        {
+            'zona': '[HIST] Temporal Costero - Bahía Blanca',
+            'tipo': TipoDesastreEnum.meteorologico,
+            'gravedad': NivelGravedadEnum.CRITICO.value,
+            'municipio': 'Bahía Blanca',
+            'dias_atras': 92,
+            'bonita_estado': 'finalizada',
+            'es_conjunta': True,
+            'estado_oferta': EstadoOfertaEnum.ADJUDICADA,
+            'detalles_lote': [
+                ('Paramédicos de Emergencia', 12, 8, 10),
+                ('Ambulancia de Traslado 4x4', 3, 2, 3),
+            ],
+            'actividades': [
+                (ong_principal.id, '[HIST] Atención prehospitalaria Bahía', EstadoActividadEnum.FINALIZADA, 90, 81, 'Se asistieron 140 vecinos en zona sur.'),
+                (ong_extra.id, '[HIST] Traslados de urgencia Bahía', EstadoActividadEnum.FINALIZADA, 90, 83, 'Operativo cerrado con 3 unidades.'),
+            ],
+        },
+        {
+            'zona': '[HIST] Incendio Sierras Chicas - Córdoba',
+            'tipo': TipoDesastreEnum.incendio_forestal,
+            'gravedad': NivelGravedadEnum.CRITICO.value,
+            'municipio': 'Córdoba Capital',
+            'dias_atras': 64,
+            'bonita_estado': 'finalizada',
+            'es_conjunta': False,
+            'estado_oferta': EstadoOfertaEnum.ADJUDICADA,
+            'detalles_lote': [
+                ('Paramédicos de Emergencia', 10, 6, 8),
+                ('Raciones de Alimento Seco', 900, 500, 900),
+            ],
+            'actividades': [
+                (ong_colab.id, '[HIST] Soporte brigadistas Sierras Chicas', EstadoActividadEnum.FINALIZADA, 62, 53, 'Apoyo médico e hidratación completados.'),
+            ],
+        },
+        {
+            'zona': '[HIST] Brote Sanitario Ribera - Rosario',
+            'tipo': TipoDesastreEnum.biologico,
+            'gravedad': NivelGravedadEnum.MEDIO.value,
+            'municipio': 'Rosario',
+            'dias_atras': 35,
+            'bonita_estado': 'finalizada',
+            'es_conjunta': True,
+            'estado_oferta': EstadoOfertaEnum.ADJUDICADA,
+            'detalles_lote': [
+                ('Carpas Sanitarias de Campaña', 5, 3, 5),
+                ('Paramédicos de Emergencia', 8, 5, 8),
+            ],
+            'actividades': [
+                (ong_principal.id, '[HIST] Posta sanitaria Rosario', EstadoActividadEnum.FINALIZADA, 33, 25, 'Postas desmontadas tras control epidemiológico.'),
+            ],
+        },
+        {
+            'zona': '[HIST] Sismo Leve Precordillera - Córdoba',
+            'tipo': TipoDesastreEnum.geologico,
+            'gravedad': NivelGravedadEnum.BAJO.value,
+            'municipio': 'Córdoba Capital',
+            'dias_atras': 16,
+            'bonita_estado': 'vinculada',
+            'es_conjunta': False,
+            'estado_oferta': EstadoOfertaEnum.ADJUDICADA,
+            'detalles_lote': [
+                ('Raciones de Alimento Seco', 600, 300, 600),
+                ('Ambulancia de Traslado 4x4', 2, 1, 2),
+            ],
+            'actividades': [
+                (ong_extra.id, '[HIST] Relevamiento preventivo precordillera', EstadoActividadEnum.EN_EJECUCION, 14, None, None),
+            ],
+        },
+        {
+            'zona': '[HIST] Sudestada Canal Sur - La Plata',
+            'tipo': TipoDesastreEnum.hidrologico,
+            'gravedad': NivelGravedadEnum.ALTO.value,
+            'municipio': 'La Plata',
+            'dias_atras': 6,
+            'bonita_estado': 'vinculada',
+            'es_conjunta': True,
+            'estado_oferta': EstadoOfertaEnum.ADJUDICADA,
+            'detalles_lote': [
+                ('Raciones de Alimento Seco', 1500, 1000, 1350),
+                ('Carpas Sanitarias de Campaña', 4, 2, 3),
+            ],
+            'actividades': [
+                (ong_principal.id, '[HIST] Asistencia evacuados Canal Sur', EstadoActividadEnum.EN_EJECUCION, 4, None, None),
+                (ong_colab.id, '[HIST] Logística alimentaria Canal Sur', EstadoActividadEnum.FINALIZADA, 5, 2, 'Primera tanda entregada al 100%.'),
+            ],
+        },
+    ]
+
+    for esc in escenarios:
+        if Emergencia.query.filter_by(zona_afectada=esc['zona']).first():
+            continue
+
+        fecha_reg = ahora - timedelta(days=esc['dias_atras'])
+        emergencia = Emergencia(
+            tipo_desastre=esc['tipo'],
+            nivel_gravedad=esc['gravedad'],
+            zona_afectada=esc['zona'],
+            descripcion=f"Emergencia histórica de prueba ({esc['tipo'].value}).",
+            responsable_id=operador.id,
+            municipio_id=municipios_map[esc['municipio']].id,
+            fecha_registro=fecha_reg,
+            updated_at=fecha_reg,
+            bonita_estado=esc['bonita_estado'],
+        )
+        db.session.add(emergencia)
+        db.session.flush()
+
+        lote = LoteNecesidades(
+            emergencia_id=emergencia.id,
+            fecha_inicio_ofertas=fecha_reg + timedelta(hours=4),
+            fecha_cierre_ofertas=fecha_reg + timedelta(days=2),
+            bonita_estado='sincronizado',
+        )
+        db.session.add(lote)
+        db.session.flush()
+
+        detalles_adjudicados = []
+        for nombre_rec, cant_nec, cant_min, cant_adj in esc['detalles_lote']:
+            rec = recursos.get(nombre_rec)
+            if not rec:
+                continue
+            db.session.add(LoteDetalle(
+                lote_id=lote.id,
+                id_recurso=rec.id,
+                cantidad_necesaria=cant_nec,
+                cantidad_minima=cant_min,
+            ))
+            detalles_adjudicados.append((rec, cant_nec, cant_adj))
+
+        fecha_oferta = fecha_reg + timedelta(days=1)
+        oferta = Oferta(
+            id_emergencia=emergencia.id,
+            convocatoria_id=lote.id,
+            creada_por_ong_id=ong_principal.id if esc['es_conjunta'] else ong_colab.id,
+            fecha_creacion=fecha_oferta,
+            estado=esc['estado_oferta'],
+            version_actual=1,
+            es_conjunta=esc['es_conjunta'],
+            fecha_ultima_modificacion=fecha_oferta + timedelta(hours=12),
+        )
+        db.session.add(oferta)
+        db.session.flush()
+
+        version = VersionOferta(
+            id_oferta=oferta.id,
+            numero_version=1,
+            fecha_version=fecha_oferta + timedelta(hours=12),
+            usuario_modificacion=operador.id,
+            observaciones='Adjudicación histórica seed',
+            estado_versiones='Adjudicada',
+        )
+        db.session.add(version)
+        db.session.flush()
+
+        participantes = [ong_principal.id, ong_colab.id] if esc['es_conjunta'] else [ong_colab.id]
+        for idx, (rec, cant_nec, cant_adj) in enumerate(detalles_adjudicados):
+            ong_det = participantes[idx % len(participantes)]
+            db.session.add(DetalleVersionOferta(
+                id_version=version.id,
+                id_ong=ong_det,
+                id_recurso=rec.id,
+                cantidad=cant_nec,
+                cantidad_adjudicada=cant_adj,
+            ))
+
+        if esc['es_conjunta']:
+            for pid in participantes:
+                db.session.add(OfertaParticipante(
+                    oferta_id=oferta.id,
+                    ong_id=pid,
+                    estado='Aceptada',
+                ))
+
+        for ong_act_id, titulo, estado_act, d_ini, d_fin, informe in esc['actividades']:
+            db.session.add(ActividadONG(
+                ong_id=ong_act_id,
+                titulo=titulo,
+                descripcion=f'Actividad operativa vinculada a {esc["zona"]}',
+                lote_referencia=lote.id,
+                estado=estado_act,
+                fecha_inicio=ahora - timedelta(days=d_ini),
+                fecha_finalizacion=(ahora - timedelta(days=d_fin)) if d_fin is not None else None,
+                informe_cierre=informe,
+                created_at=ahora - timedelta(days=d_ini),
+            ))
+
+    db.session.commit()
+    print('  [+] Histórico para reportes cargado correctamente.')
