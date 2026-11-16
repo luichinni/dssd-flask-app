@@ -428,6 +428,10 @@ def seed_ofertas_data():
         db.session.add(inventario)
         db.session.flush()
 
+    if inventario.cantidad_disponible <= 0:
+        print('  [!] Sin inventario disponible para la oferta seed. Se conserva el estado existente.')
+        return
+
     oferta = Oferta.query.filter_by(
         convocatoria_id=lote.id,
         creada_por_ong_id=ong_id,

@@ -17,12 +17,19 @@ services:
     container_name: flask_app
     env_file:
       - .env
+    environment:
+      PRIORIDADES_URL: ${PRIORIDADES_URL:-http://prioridades:8000}
     volumes:
       - .:/app
     ports:
       - "5000:5000"
     depends_on:
       - db
+      - prioridades
+    restart: always
+
+  prioridades:
+    build: ./anexo-kubernetes/servicio
     restart: always
 
 volumes:

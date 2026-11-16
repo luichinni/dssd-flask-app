@@ -1,6 +1,7 @@
 from src.core.database import db
 from src.core.models.emergencia import Emergencia
 from src.core.services.bonita import BonitaError, _ClienteBonita, iniciar_proceso
+from src.core.services.prioridades import obtener_prioridad
 from flask import current_app
 
 def listar_emergencias(reportante_id: int):
@@ -10,11 +11,12 @@ def listar_emergencias(reportante_id: int):
 
 def crear_emergencia(tipo_desastre: str, nivel_gravedad: int, zona_afectada: str, descripcion: str, reportante_id: int, municipio_id: int):
     """Guarda la emergencia y crea su caso BPM, sin reintentos automáticos."""
+    prioridad = obtener_prioridad(nivel_gravedad, zona_afectada)
     nueva_emergencia = Emergencia(
-
         tipo_desastre=tipo_desastre,
         nivel_gravedad=nivel_gravedad,
         zona_afectada=zona_afectada,
+        prioridad=prioridad,
         descripcion=descripcion,
         responsable_id=reportante_id,
         municipio_id=municipio_id,

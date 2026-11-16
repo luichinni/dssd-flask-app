@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prioridades
+spec:
+  selector:
+    matchLabels:
+      app: prioridades
+  template:
+    metadata:
+      labels:
+        app: prioridades
+    spec:
+      containers:
+        - name: prioridades
+          image: rescuesync-prioridades:local
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /salud
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /salud
+              port: http

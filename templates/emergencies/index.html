@@ -42,6 +42,9 @@
                         </span>
                     </div>
 
+                    {% if emergencia.prioridad is not none %}
+                        <p class="text-sm font-semibold text-slate-700 mt-3">Prioridad {{ emergencia.prioridad }}/10</p>
+                    {% endif %}
                     <p class="text-sm text-slate-600 mt-3">
                         {{ emergencia.descripcion }}
                     </p>

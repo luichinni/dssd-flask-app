@@ -44,6 +44,9 @@ docker exec -it <nombre_o_id_del_contenedor> /bin/sh
 ```
 ## Inicio de procesos en Bonita
 
+El alta de emergencias consulta el servicio del [anexo Kubernetes](anexo-kubernetes/DESPLIEGUE.md)
+antes de iniciar Bonita. Docker Compose levanta una instancia local para desarrollo.
+
 Copiar la configuración de Bonita de `.env.example` a `.env`. El ejemplo usa
 `123` para las cuentas de prueba del runtime local. Si cambiás una contraseña
 en Bonita, actualizá la variable correspondiente en tu `.env`.

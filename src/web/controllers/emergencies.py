@@ -1,6 +1,7 @@
-from flask import Blueprint, abort, render_template
+from flask import Blueprint, abort, current_app, render_template
 from flask_login import login_required, current_user
 from src.core.services.emergencias import listar_emergencias, crear_emergencia
+from src.core.services.prioridades import PrioridadesError
 from src.web.decorators.roles_required import roles_required
 from src.core.enums import RolEnum, NivelGravedadEnum, TipoDesastreEnum
 from flask import request, redirect, url_for, flash
@@ -42,18 +43,33 @@ def create():
     if municipio_id is None:
         abort(400)
 
-    emergencia = crear_emergencia(
-        tipo_desastre=request.form['tipo_desastre'],
-        nivel_gravedad=int(request.form['nivel_gravedad']),
-        zona_afectada=request.form['zona_afectada'],
-        descripcion=request.form.get('descripcion', ''),
-        reportante_id=current_user.id,
-        municipio_id=int(municipio_id),
-    )
+    try:
+        tipo_desastre = TipoDesastreEnum(request.form.get('tipo_desastre'))
+        nivel_gravedad = NivelGravedadEnum(request.form.get('nivel_gravedad', type=int))
+        zona_afectada = request.form.get('zona_afectada', '').strip()
+        if not 1 <= len(zona_afectada) <= 100:
+            raise ValueError("Zona afectada inválida")
+    except ValueError:
+        flash("Revisá el tipo de desastre, la gravedad y la zona afectada.", "error")
+        return new(), 400
+
+    try:
+        emergencia = crear_emergencia(
+            tipo_desastre=tipo_desastre.value,
+            nivel_gravedad=nivel_gravedad.value,
+            zona_afectada=zona_afectada,
+            descripcion=request.form.get('descripcion', ''),
+            reportante_id=current_user.id,
+            municipio_id=int(municipio_id),
+        )
+    except PrioridadesError as error:
+        current_app.logger.warning("Falló la asignación de prioridad: %s", error, exc_info=True)
+        flash("No se registró la emergencia porque no se pudo asignar la prioridad. Volvé a intentar.", "error")
+        return new(), 503
 
     if emergencia.bonita_case_id is not None:
         flash(
-            f"Emergencia registrada. Caso #{emergencia.bonita_case_id} creado en Bonita.",
+            f"Emergencia registrada con prioridad {emergencia.prioridad}/10. Caso #{emergencia.bonita_case_id} creado en Bonita.",
             "success",
         )
     else:
