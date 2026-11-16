@@ -12,6 +12,7 @@ class Emergencia(db.Model):
     tipo_desastre = db.Column(db.Enum(TipoDesastreEnum, values_callable=lambda obj: [e.value for e in obj]), nullable=False)
     nivel_gravedad = db.Column(db.Integer, nullable=False, default=NivelGravedadEnum.BAJO.value)
     zona_afectada = db.Column(db.String(100), nullable=False)
+    prioridad = db.Column(db.Integer, nullable=True)
     descripcion = db.Column(db.Text, nullable=True)
     responsable_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False, index=True)
     municipio_id = db.Column(db.Integer, db.ForeignKey('municipios.id'), nullable=False, index=True)
