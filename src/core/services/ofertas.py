@@ -151,6 +151,55 @@ def guardar_oferta():
     """Guarda la oferta en la base de datos."""
     pass
 
+def registrar_ofertas_validadas(emergencia_id: int, payload: dict):
+    """Registra el resultado de la validación externa recibido desde Bonita."""
+    emergencia = db.session.get(Emergencia, emergencia_id)
+    if emergencia is None:
+        raise ValueError(f'La emergencia {emergencia_id} no existe.')
+
+    ofertas_validadas = payload.get('ofertas_validadas') or []
+    validadas_por_id = {
+        int(item['id_oferta']): item
+        for item in ofertas_validadas
+        if isinstance(item, dict) and item.get('id_oferta') is not None
+    }
+
+    ahora = datetime.now(timezone.utc)
+    ofertas = Oferta.query.filter_by(id_emergencia=emergencia_id).all()
+    for oferta in ofertas:
+        estado_actual = oferta.estado.value if hasattr(oferta.estado, 'value') else oferta.estado
+        if estado_actual == EstadoOfertaEnum.ADJUDICADA.value:
+            continue
+
+        version_vigente = obtener_version_vigente(oferta)
+        validada = validadas_por_id.get(oferta.id)
+        if validada is not None:
+            oferta.estado = EstadoOfertaEnum.ACEPTADA
+            for participante in oferta.participantes:
+                participante.estado = EstadoOfertaEnum.ACEPTADA
+            if version_vigente is not None:
+                version_vigente.estado_version = EstadoOfertaEnum.ACEPTADA.value
+                perfil = validada.get('perfil_competencia_ong', '')
+                riesgo = validada.get('nivel_riesgo_permitido', '')
+                version_vigente.observaciones = (
+                    f'Validada externamente (Perfil: {perfil}, Riesgo: {riesgo}).'
+                )
+        else:
+            oferta.estado = EstadoOfertaEnum.RECHAZADA
+            for participante in oferta.participantes:
+                participante.estado = EstadoOfertaEnum.RECHAZADA
+            if version_vigente is not None:
+                version_vigente.estado_version = EstadoOfertaEnum.RECHAZADA.value
+                version_vigente.observaciones = 'Rechazada en validación externa por falta de certificaciones vigentes.'
+
+        oferta.fecha_ultima_modificacion = ahora
+
+    for lote in LoteNecesidades.query.filter_by(emergencia_id=emergencia_id).all():
+        lote.bonita_estado = 'validado'
+
+    db.session.commit()
+
+
 def listar_ofertas_aceptadas(emergencia_id: int):
     """Devuelve las ofertas aceptadas de una emergencia, candidatas a ser adjudicadas."""
     return (

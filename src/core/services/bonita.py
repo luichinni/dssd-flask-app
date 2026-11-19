@@ -375,15 +375,31 @@ def enviar_ofertas_a_validar(emergencia_id: int):
         "ofertas": ofertas_payload,
     }
 
+    from src.core.models.lote_necesidades import LoteNecesidades
+    lotes_emergencia = LoteNecesidades.query.filter_by(emergencia_id=emergencia_id).all()
+    estados_previos = {lote.id: lote.bonita_estado for lote in lotes_emergencia}
+    for lote in lotes_emergencia:
+        if lote.bonita_estado != "validado":
+            lote.bonita_estado = "validando"
+    db.session.commit()
+
     cliente = _ClienteBonita("SISTEMA_NACIONAL")
-    cliente.completar(
-        emergencia.bonita_case_id,
-        "Validar ofertas",
-        {
-            "todosLotesCubiertos_input": cubiertos,
-            "solicitud_validacion_input": json.dumps(payload_validacion),
-        }
-    )
+    try:
+        cliente.completar(
+            emergencia.bonita_case_id,
+            "Validar ofertas",
+            {
+                "todosLotesCubiertos_input": cubiertos,
+                "solicitud_validacion_input": json.dumps(payload_validacion),
+            }
+        )
+    except Exception:
+        for lote in lotes_emergencia:
+            db.session.refresh(lote)
+            if lote.bonita_estado == "validando":
+                lote.bonita_estado = estados_previos[lote.id]
+        db.session.commit()
+        raise
 
 
 def enviar_adjudicaciones_a_bonita(emergencia_id: int):

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -126,7 +126,7 @@ def evaluar_convocatoria(lote_id: int):
     cantidades = cantidades_ofertadas_por_recurso(lote.emergencia_id)
     evaluacion = evaluar_minimos_lote(lote, cantidades)
 
-    if lote.emergencia and lote.emergencia.bonita_case_id:
+    if lote.emergencia and lote.emergencia.bonita_case_id and lote.bonita_estado not in ("validando", "validado"):
         try:
             from src.core.services.bonita import enviar_ofertas_a_validar
             enviar_ofertas_a_validar(lote.emergencia_id)
@@ -138,6 +138,7 @@ def evaluar_convocatoria(lote_id: int):
         lote=lote,
         evaluacion=evaluacion,
         requiere_decision=lote_requiere_decision(lote, cantidades),
+        validacion_en_curso=(lote.bonita_estado == "validando"),
         reintento_cierre=(datetime.now(timezone.utc) + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M'),
         recursos=RecursoCatalogo.query.order_by(RecursoCatalogo.nombre.asc()).all(),
     )
@@ -241,6 +242,19 @@ def reintentar(lote_id: int):
     else:
         flash(f'Lote #{lote.id} reintentado o reabierto correctamente.', 'success')
     return redirect(url_for('ccr.lotes'))
+@ccr_bp.get('/lotes/<int:lote_id>/estado-validacion')
+@login_required
+@roles_required(RolEnum.CENTRO_COORDINADOR)
+def estado_validacion_lote(lote_id: int):
+    lote = obtener_lote(lote_id)
+    if lote is None:
+        return jsonify({"error": "Lote no encontrado"}), 404
+    return jsonify({
+        "validado": lote.bonita_estado == "validado",
+        "bonita_estado": lote.bonita_estado,
+    })
+
+
 @ccr_bp.post('/lotes/<int:lote_id>/validar-ofertas')
 @login_required
 @roles_required(RolEnum.CENTRO_COORDINADOR)
