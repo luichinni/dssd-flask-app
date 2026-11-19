@@ -602,4 +602,4 @@ def iniciar_vigilante_reintentos(app):
 
     hilo = threading.Thread(target=_bucle, name="bonita-retry-watcher", daemon=True)
     hilo.start()
-    logger.info("Vigilante de reintentos Bonita iniciado (intervalo %ss).", intervalo)
+    app.logger.info("Vigilante de reintentos Bonita iniciado (intervalo %ss).", intervalo)
