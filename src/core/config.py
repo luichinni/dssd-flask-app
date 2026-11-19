@@ -1,11 +1,35 @@
 from os import environ
+from urllib.parse import urlsplit, urlunsplit
 from dotenv import load_dotenv
 from datetime import timedelta
 
 load_dotenv(dotenv_path='.env')
 
+
+def _resolver_bonita_url(raw_url: str, raw_port: str) -> str:
+    """Resuelve BONITA_URL aplicando el puerto configurado en BONITA_PORT."""
+    url = str(raw_url or "").strip()
+    port = str(raw_port or "").strip()
+    if not url:
+        return ""
+    if port:
+        url = url.replace("${BONITA_PORT}", port).replace("$BONITA_PORT", port)
+        parsed = urlsplit(url)
+        if parsed.scheme in ("http", "https") and parsed.hostname:
+            host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+            auth = ""
+            if parsed.username:
+                auth = parsed.username
+                if parsed.password:
+                    auth += f":{parsed.password}"
+                auth += "@"
+            return urlunsplit((parsed.scheme, f"{auth}{host}:{port}", parsed.path, parsed.query, parsed.fragment))
+    return url
+
+
 class Config(object):
-    BONITA_URL = environ.get("BONITA_URL", "")
+    BONITA_PORT = environ.get("BONITA_PORT", "18080").strip() or "18080"
+    BONITA_URL = _resolver_bonita_url(environ.get("BONITA_URL", ""), environ.get("BONITA_PORT", ""))
     BONITA_USERNAME = environ.get("BONITA_USERNAME", "")
     BONITA_PASSWORD = environ.get("BONITA_PASSWORD", "")
     BONITA_CCR_USERNAME = environ.get("BONITA_CCR_USERNAME", "ccr.coordinador")
@@ -17,7 +41,7 @@ class Config(object):
     BONITA_TIMEOUT = environ.get("BONITA_TIMEOUT", "15")
     BONITA_CALLBACK_API_KEY = environ.get("BONITA_CALLBACK_API_KEY", "")
     BONITA_ADMIN_USERNAME = environ.get("BONITA_ADMIN_USERNAME", "walter.bates")
-    BONITA_ADMIN_PASSWORD = environ.get("BONITA_ADMIN_PASSWORD", "bpm")
+    BONITA_ADMIN_PASSWORD = environ.get("BONITA_ADMIN_PASSWORD", "Grupo11!")
     BONITA_RETRY_ENABLED = environ.get("BONITA_RETRY_ENABLED", "true").lower() in ("1", "true", "yes")
     BONITA_RETRY_INTERVAL = int(environ.get("BONITA_RETRY_INTERVAL", "30"))
     TESTING = False
