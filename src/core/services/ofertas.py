@@ -201,6 +201,60 @@ def registrar_ofertas_validadas(emergencia_id: int, payload: dict):
     db.session.commit()
 
 
+def registrar_compromiso_externo(emergencia_id: int, payload: dict):
+    """Registra en FlaskApp la confirmación de compromiso/stock devuelta por el servicio externo vía Bonita."""
+    emergencia = db.session.get(Emergencia, emergencia_id)
+    if emergencia is None:
+        raise ValueError(f'La emergencia {emergencia_id} no existe.')
+
+    ofertas_rechazadas = payload.get('ofertas_rechazadas') or []
+    ids_rechazadas = {
+        int(item['id_oferta'])
+        for item in ofertas_rechazadas
+        if isinstance(item, dict) and item.get('id_oferta') is not None
+    }
+
+    ahora = ahora_ar()
+    if ids_rechazadas:
+        for oferta in Oferta.query.filter(Oferta.id_emergencia == emergencia_id, Oferta.id.in_(ids_rechazadas)).all():
+            oferta.estado = EstadoOfertaEnum.RECHAZADA
+            for participante in oferta.participaciones:
+                participante.estado = EstadoOfertaEnum.RECHAZADA.value
+            version_vigente = obtener_version_vigente(oferta)
+            if version_vigente is not None:
+                version_vigente.estado_version = EstadoOfertaEnum.RECHAZADA.value
+                version_vigente.observaciones = 'Rechazada al comprometer stock en el Sistema Nacional.'
+            oferta.fecha_ultima_modificacion = ahora
+            ActividadONG.query.filter(
+                ActividadONG.titulo == f'Despliegue por adjudicación de oferta #{oferta.id}',
+                ActividadONG.estado != EstadoActividadEnum.FINALIZADA,
+            ).delete(synchronize_session=False)
+
+    if emergencia.bonita_estado != 'finalizada':
+        emergencia.bonita_estado = 'comprometida'
+
+    db.session.commit()
+
+
+def registrar_liberacion_externa(emergencia_id: int, payload: dict):
+    """Registra en FlaskApp la confirmación de liberación de recursos devuelta por el servicio externo vía Bonita."""
+    emergencia = db.session.get(Emergencia, emergencia_id)
+    if emergencia is None:
+        raise ValueError(f'La emergencia {emergencia_id} no existe.')
+
+    lote_ids = [l.id for l in emergencia.lotes]
+    pendientes_totales = 0
+    if lote_ids:
+        pendientes_totales = ActividadONG.query.filter(
+            ActividadONG.lote_referencia.in_(lote_ids),
+            ActividadONG.estado != EstadoActividadEnum.FINALIZADA,
+        ).count()
+
+    if pendientes_totales == 0:
+        emergencia.bonita_estado = 'finalizada'
+        db.session.commit()
+
+
 def listar_ofertas_aceptadas(emergencia_id: int):
     """Devuelve las ofertas aceptadas de una emergencia, candidatas a ser adjudicadas."""
     return (

@@ -1,10 +1,7 @@
 """Orquestador de casos reales de prueba en Bonita BPM hasta su archivo final."""
-import json
 import logging
 import time
 from datetime import timedelta
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from src.core.database import db
 from src.core.enums import (
@@ -113,77 +110,8 @@ ESCENARIOS_BPM = [
 ]
 
 
-def _http_json(url: str, method: str = "GET", payload: dict | None = None, headers: dict | None = None) -> dict:
-    req_headers = {"Accept": "application/json"}
-    if headers:
-        req_headers.update(headers)
-    data = None
-    if payload is not None:
-        req_headers["Content-Type"] = "application/json"
-        data = json.dumps(payload).encode("utf-8")
-    req = Request(url, data=data, headers=req_headers, method=method)
-    with urlopen(req, timeout=10) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
-def _resolver_api_externa_base() -> str:
-    candidatos = ["http://host.docker.internal:8000", "http://localhost:8000"]
-    for base in candidatos:
-        try:
-            auth = _http_json(
-                f"{base}/api/v1/auth/login",
-                method="POST",
-                payload={"email": "operador@emergencias.gob.ar", "password": "PasswordSegura123!"},
-            )
-            if auth.get("access_token"):
-                return base
-        except (HTTPError, URLError, TimeoutError, ValueError):
-            continue
-    raise BonitaError(
-        "No se pudo conectar/autenticar con la API externa en puerto 8000. "
-        "Verificá que DSSD-Servicio-Externo esté levantado y seedeado."
-    )
-
-
-def _verificar_precondiciones(ongs_ids: set[int], recursos_ids: set[int]) -> None:
+def _verificar_precondiciones() -> None:
     resolver_process_definition_id()
-    base_ext = _resolver_api_externa_base()
-    auth = _http_json(
-        f"{base_ext}/api/v1/auth/login",
-        method="POST",
-        payload={"email": "operador@emergencias.gob.ar", "password": "PasswordSegura123!"},
-    )
-    token = auth["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    try:
-        ongs_resp = _http_json(f"{base_ext}/api/v1/ongs/habilitadas", headers=headers)
-        ongs_ext = {int(o["id_ong"]) for o in ongs_resp.get("ongs", [])}
-        faltan_ongs = sorted(ongs_ids - ongs_ext)
-        if faltan_ongs:
-            raise BonitaError(
-                f"Faltan ONGs habilitadas en la API externa: {faltan_ongs}. "
-                "Ejecutá 'python -m app.cli.seed_certificaciones_demo' en DSSD-Servicio-Externo."
-            )
-
-        disp_resp = _http_json(f"{base_ext}/api/v1/recursos/disponibilidad", headers=headers)
-        pares_ok = {
-            (int(item["id_ong"]), int(item["id_recurso"])): int(item["inventario_actual"])
-            for item in disp_resp.get("recursos", [])
-        }
-        faltan_inv = [
-            (oid, rid)
-            for oid in sorted(ongs_ids)
-            for rid in sorted(recursos_ids)
-            if pares_ok.get((oid, rid), 0) < 100
-        ]
-        if faltan_inv:
-            raise BonitaError(
-                f"Falta stock suficiente en la API externa para {faltan_inv}. "
-                "Ejecutá 'python -m app.cli.seed_certificaciones_demo' en DSSD-Servicio-Externo."
-            )
-    except (HTTPError, URLError, TimeoutError, KeyError, ValueError) as exc:
-        raise BonitaError(f"Error consultando catálogo en la API externa: {exc}") from exc
 
 
 def _asegurar_inventario_local(ong_ids: list[int], recursos_map: dict[str, RecursoCatalogo]) -> dict[tuple[int, int], InventarioONG]:
@@ -319,7 +247,7 @@ def ejecutar_seed_bonita(limite: int = 4, ventana_segundos: int = 12) -> dict:
         raise BonitaError("Faltan recursos en RecursoCatalogo. Ejecutá 'flask seed-db' primero.")
 
     municipios_map = {m.nombre: m for m in Municipio.query.all()}
-    _verificar_precondiciones({ong1_id, ong2_id}, {r.id for r in recursos_map.values()})
+    _verificar_precondiciones()
     inventarios = _asegurar_inventario_local([ong1_id, ong2_id], recursos_map)
 
     ongs_ctx = {

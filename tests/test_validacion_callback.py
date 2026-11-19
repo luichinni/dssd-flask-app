@@ -9,7 +9,11 @@ from flask import Flask
 from src.core.enums import EstadoOfertaEnum, TipoDesastreEnum
 from src.core.services import bonita as bonita_service
 from src.core.services.lotes import reabrir_convocatoria
-from src.core.services.ofertas import registrar_ofertas_validadas
+from src.core.services.ofertas import (
+    registrar_compromiso_externo,
+    registrar_liberacion_externa,
+    registrar_ofertas_validadas,
+)
 from src.core.timezone import ahora_ar
 from src.web.controllers.bonita_callbacks import bonita_callbacks_bp
 
@@ -145,6 +149,69 @@ class TestValidacionCallback(unittest.TestCase):
         mock_validar.return_value = (lote, {}, [])
         reabrir_convocatoria(9, ahora_ar() + timedelta(hours=24))
         self.assertEqual(lote.bonita_estado, "sincronizado")
+        mock_db.session.commit.assert_called_once()
+
+    def test_compromiso_registrado_rechaza_api_key_invalida(self):
+        resp = self.client.post("/api/emergencias/1/compromiso-registrado", json={})
+        self.assertEqual(resp.status_code, 401)
+
+    @patch("src.web.controllers.bonita_callbacks.registrar_compromiso_externo")
+    def test_compromiso_registrado_acepta_callback(self, mock_registrar):
+        payload = {"id_emergencia": 1, "estado": "bloqueo_exitoso", "ofertas_rechazadas": []}
+        resp = self.client.post(
+            "/api/emergencias/1/compromiso-registrado",
+            json=payload,
+            headers={"secret-key-api": "clave_best_api_ever"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json(), {"ok": True})
+        mock_registrar.assert_called_once_with(1, payload)
+
+    @patch("src.web.controllers.bonita_callbacks.registrar_liberacion_externa")
+    def test_recursos_liberados_acepta_callback(self, mock_registrar):
+        payload = {"estado": "liberacion_exitosa", "id_ong": 1}
+        resp = self.client.post(
+            "/api/emergencias/1/recursos-liberados",
+            json=payload,
+            headers={"secret-key-api": "clave_best_api_ever"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json(), {"ok": True})
+        mock_registrar.assert_called_once_with(1, payload)
+
+    @patch("src.core.services.ofertas.ActividadONG")
+    @patch("src.core.services.ofertas.Oferta")
+    @patch("src.core.services.ofertas.db")
+    def test_registrar_compromiso_externo_actualiza_rechazos_y_estado(self, mock_db, mock_oferta_cls, mock_act_cls):
+        em = SimpleNamespace(id=1, bonita_estado="vinculada")
+        mock_db.session.get.return_value = em
+        ver = SimpleNamespace(numero_version=1, estado_version="Aceptada", observaciones=None)
+        oferta_rech = SimpleNamespace(
+            id=20,
+            estado=EstadoOfertaEnum.ADJUDICADA,
+            version_actual=1,
+            versiones=[ver],
+            participaciones=[SimpleNamespace(estado="Aceptada")],
+            fecha_ultima_modificacion=None,
+        )
+        mock_oferta_cls.query.filter.return_value.all.return_value = [oferta_rech]
+
+        registrar_compromiso_externo(1, {"ofertas_rechazadas": [{"id_oferta": 20}]})
+        self.assertEqual(em.bonita_estado, "comprometida")
+        self.assertEqual(oferta_rech.estado, EstadoOfertaEnum.RECHAZADA)
+        self.assertEqual(ver.estado_version, EstadoOfertaEnum.RECHAZADA.value)
+        mock_act_cls.query.filter.return_value.delete.assert_called_once()
+        mock_db.session.commit.assert_called_once()
+
+    @patch("src.core.services.ofertas.ActividadONG")
+    @patch("src.core.services.ofertas.db")
+    def test_registrar_liberacion_externa_finaliza_emergencia(self, mock_db, mock_act_cls):
+        em = SimpleNamespace(id=1, bonita_estado="comprometida", lotes=[SimpleNamespace(id=7)])
+        mock_db.session.get.return_value = em
+        mock_act_cls.query.filter.return_value.count.return_value = 0
+
+        registrar_liberacion_externa(1, {"estado": "liberacion_exitosa"})
+        self.assertEqual(em.bonita_estado, "finalizada")
         mock_db.session.commit.assert_called_once()
 
 
