@@ -358,8 +358,8 @@ def enviar_ofertas_a_validar(emergencia_id: int):
             continue
         ofertas_payload.append({
             "id_oferta": of.id,
-            "es_conjunta": len(of.participantes) > 1,
-            "id_ong": of.id_ong,
+            "es_conjunta": bool(of.es_conjunta or len(of.participaciones) > 1),
+            "id_ong": of.creada_por_ong_id or (of.participaciones[0].ong_id if of.participaciones else None),
             "recursos": [
                 {
                     "id_recurso": d.id_recurso,
@@ -420,7 +420,11 @@ def enviar_adjudicaciones_a_bonita(emergencia_id: int):
     if not adjudicadas:
         raise BonitaError(f"No hay ofertas adjudicadas para la emergencia {emergencia_id}.")
 
-    ongs_unicas = {o.id_ong for o in adjudicadas}
+    ongs_unicas = {
+        o.creada_por_ong_id or (o.participaciones[0].ong_id if o.participaciones else None)
+        for o in adjudicadas
+    }
+    ongs_unicas.discard(None)
     ongs_pendientes = len(ongs_unicas)
 
     payload_adjudicacion = {
@@ -428,7 +432,7 @@ def enviar_adjudicaciones_a_bonita(emergencia_id: int):
         "ofertas_adjudicadas": [
             {
                 "id_oferta": o.id,
-                "id_ong": o.id_ong,
+                "id_ong": o.creada_por_ong_id or (o.participaciones[0].ong_id if o.participaciones else None),
                 "recursos": [
                     {
                         "id_recurso": d.id_recurso,

@@ -176,8 +176,8 @@ def registrar_ofertas_validadas(emergencia_id: int, payload: dict):
         validada = validadas_por_id.get(oferta.id)
         if validada is not None:
             oferta.estado = EstadoOfertaEnum.ACEPTADA
-            for participante in oferta.participantes:
-                participante.estado = EstadoOfertaEnum.ACEPTADA
+            for participante in oferta.participaciones:
+                participante.estado = EstadoOfertaEnum.ACEPTADA.value
             if version_vigente is not None:
                 version_vigente.estado_version = EstadoOfertaEnum.ACEPTADA.value
                 perfil = validada.get('perfil_competencia_ong', '')
@@ -187,8 +187,8 @@ def registrar_ofertas_validadas(emergencia_id: int, payload: dict):
                 )
         else:
             oferta.estado = EstadoOfertaEnum.RECHAZADA
-            for participante in oferta.participantes:
-                participante.estado = EstadoOfertaEnum.RECHAZADA
+            for participante in oferta.participaciones:
+                participante.estado = EstadoOfertaEnum.RECHAZADA.value
             if version_vigente is not None:
                 version_vigente.estado_version = EstadoOfertaEnum.RECHAZADA.value
                 version_vigente.observaciones = 'Rechazada en validación externa por falta de certificaciones vigentes.'

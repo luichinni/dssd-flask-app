@@ -45,7 +45,7 @@ class TestValidacionCallback(unittest.TestCase):
             estado=EstadoOfertaEnum.PENDIENTE,
             version_actual=1,
             versiones=[ver_valida],
-            participantes=[SimpleNamespace(estado=EstadoOfertaEnum.PENDIENTE)],
+            participaciones=[SimpleNamespace(estado=EstadoOfertaEnum.PENDIENTE.value)],
             fecha_ultima_modificacion=None,
         )
         ver_invalida = SimpleNamespace(numero_version=1, estado_version="Pendiente", observaciones=None)
@@ -54,7 +54,7 @@ class TestValidacionCallback(unittest.TestCase):
             estado=EstadoOfertaEnum.PENDIENTE,
             version_actual=1,
             versiones=[ver_invalida],
-            participantes=[SimpleNamespace(estado=EstadoOfertaEnum.PENDIENTE)],
+            participaciones=[SimpleNamespace(estado=EstadoOfertaEnum.PENDIENTE.value)],
             fecha_ultima_modificacion=None,
         )
         lote = SimpleNamespace(id=5, bonita_estado="validando")
@@ -77,10 +77,10 @@ class TestValidacionCallback(unittest.TestCase):
         )
 
         self.assertEqual(oferta_valida.estado, EstadoOfertaEnum.ACEPTADA)
-        self.assertEqual(oferta_valida.participantes[0].estado, EstadoOfertaEnum.ACEPTADA)
+        self.assertEqual(oferta_valida.participaciones[0].estado, EstadoOfertaEnum.ACEPTADA.value)
         self.assertEqual(ver_valida.estado_version, EstadoOfertaEnum.ACEPTADA.value)
         self.assertEqual(oferta_invalida.estado, EstadoOfertaEnum.RECHAZADA)
-        self.assertEqual(oferta_invalida.participantes[0].estado, EstadoOfertaEnum.RECHAZADA)
+        self.assertEqual(oferta_invalida.participaciones[0].estado, EstadoOfertaEnum.RECHAZADA.value)
         self.assertEqual(ver_invalida.estado_version, EstadoOfertaEnum.RECHAZADA.value)
         self.assertEqual(lote.bonita_estado, "validado")
         mock_db.session.commit.assert_called_once()
