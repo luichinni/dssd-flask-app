@@ -155,7 +155,7 @@ class _ClienteBonita:
     def obtener_caso_archivado(self, case_id):
         """Devuelve el registro archivado de un caso (si ya finalizó) o None."""
         case_id = _id(case_id, "ID del caso")
-        query = urlencode({"c": 1, "p": 0, "f": f"rootCaseId={case_id}"})
+        query = urlencode({"c": 1, "p": 0, "f": f"sourceObjectId={case_id}"})
         casos = self.pedir(f"/API/bpm/archivedCase?{query}", etapa="consultar caso archivado")
         if isinstance(casos, list) and casos:
             return casos[0]
@@ -171,7 +171,7 @@ class _ClienteBonita:
                 return None
             raise
 
-    def completar(self, case_id, nombre, datos=None):
+    def completar(self, case_id, nombre, datos=None, esperar_nueva=False):
         """Consulta hasta que la tarea esté lista; nunca reintenta ejecución."""
         deadline = time.monotonic() + self.timeout
         while True:
@@ -182,7 +182,7 @@ class _ClienteBonita:
             if matches:
                 task = matches[0]
                 break
-            if any(t.get("name") == nombre and t.get("state") == "completed" for t in self.tareas(case_id, True)):
+            if not esperar_nueva and any(t.get("name") == nombre and t.get("state") == "completed" for t in self.tareas(case_id, True)):
                 return  # Ya completada, no ejecutar de nuevo.
             if time.monotonic() >= deadline:
                 raise BonitaError(f"La tarea {nombre} no está disponible en el caso {case_id}.")
@@ -312,13 +312,13 @@ def completar_decision_post_convocatoria(case_id, decision: AccionPostOfertaEnum
 
     if decision == AccionPostOfertaEnum.REFORMULAR:
         # Pasa por la tarea intermedia de reformulación
-        cliente.completar(case_id, "Reformular lotes de necesidades")
+        cliente.completar(case_id, "Reformular lotes de necesidades", esperar_nueva=True)
         time.sleep(1.0)
 
     # Ambas ramas terminan en Publicar convocatoria para fijar el temporizador
     cliente.completar(case_id, "Publicar convocatoria", {
         "fecha_cierre_input": fecha_cierre_iso
-    })
+    }, esperar_nueva=True)
 def construir_solicitud_validacion(emergencia_id: int) -> dict:
     """Construye el payload de ofertas para validar en el servicio externo y marca lotes en validación."""
     from src.core.database import db
@@ -362,16 +362,19 @@ def construir_solicitud_validacion(emergencia_id: int) -> dict:
         ver = obtener_version_vigente(of)
         if not ver or not ver.detalles:
             continue
+        cant_por_recurso: dict[int, int] = {}
+        for d in ver.detalles:
+            cant_por_recurso[d.id_recurso] = cant_por_recurso.get(d.id_recurso, 0) + int(d.cantidad)
         ofertas_payload.append({
             "id_oferta": of.id,
             "es_conjunta": bool(of.es_conjunta or len(of.participaciones) > 1),
             "id_ong": of.creada_por_ong_id or (of.participaciones[0].ong_id if of.participaciones else None),
             "recursos": [
                 {
-                    "id_recurso": d.id_recurso,
-                    "cantidad_ofrecida": d.cantidad,
+                    "id_recurso": rec_id,
+                    "cantidad_ofrecida": cant,
                 }
-                for d in ver.detalles
+                for rec_id, cant in cant_por_recurso.items()
             ],
         })
 
@@ -444,29 +447,36 @@ def enviar_adjudicaciones_a_bonita(emergencia_id: int):
     if not adjudicadas:
         raise BonitaError(f"No hay ofertas adjudicadas para la emergencia {emergencia_id}.")
 
-    ongs_unicas = {
-        o.creada_por_ong_id or (o.participaciones[0].ong_id if o.participaciones else None)
-        for o in adjudicadas
-    }
-    ongs_unicas.discard(None)
+    ongs_unicas = set()
+    ofertas_adj_payload = []
+    for o in adjudicadas:
+        ver = obtener_version_vigente(o)
+        detalles = ver.detalles if ver else []
+        cant_por_recurso: dict[int, int] = {}
+        for d in detalles:
+            ong_det = getattr(d, "id_ong", None) or o.creada_por_ong_id
+            if ong_det is not None:
+                ongs_unicas.add(ong_det)
+            cant_por_recurso[d.id_recurso] = cant_por_recurso.get(d.id_recurso, 0) + int(d.cantidad_adjudicada or d.cantidad)
+        if not detalles and o.creada_por_ong_id is not None:
+            ongs_unicas.add(o.creada_por_ong_id)
+        ofertas_adj_payload.append({
+            "id_oferta": o.id,
+            "id_ong": o.creada_por_ong_id or (o.participaciones[0].ong_id if o.participaciones else None),
+            "recursos": [
+                {
+                    "id_recurso": rec_id,
+                    "cantidad_adjudicada": cant,
+                }
+                for rec_id, cant in cant_por_recurso.items()
+            ],
+        })
+
     ongs_pendientes = len(ongs_unicas)
 
     payload_adjudicacion = {
         "id_emergencia": emergencia.id,
-        "ofertas_adjudicadas": [
-            {
-                "id_oferta": o.id,
-                "id_ong": o.creada_por_ong_id or (o.participaciones[0].ong_id if o.participaciones else None),
-                "recursos": [
-                    {
-                        "id_recurso": d.id_recurso,
-                        "cantidad_adjudicada": d.cantidad_adjudicada or d.cantidad,
-                    }
-                    for d in (obtener_version_vigente(o).detalles if obtener_version_vigente(o) else [])
-                ]
-            }
-            for o in adjudicadas
-        ]
+        "ofertas_adjudicadas": ofertas_adj_payload,
     }
 
     cliente = _ClienteBonita()
@@ -492,7 +502,8 @@ def notificar_cierre_ong(case_id: int, ong_id: int):
         {
             "finONG": 1,
             "id_ong_input": ong_id,
-        }
+        },
+        esperar_nueva=True,
     )
 
 

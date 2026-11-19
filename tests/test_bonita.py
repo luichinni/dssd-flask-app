@@ -44,6 +44,20 @@ class TareasBonitaTests(unittest.TestCase):
         c.completar(1003, "Crear lotes de necesidades")
         c.pedir.assert_not_called()
 
+    def test_esperar_nueva_ignora_archivada_anterior(self):
+        c = self.cliente()
+        c.timeout = 0.6
+        c.tareas = Mock(side_effect=[
+            [],
+            [{"name": "Publicar convocatoria", "state": "completed"}],
+            [{"id": "88", "name": "Publicar convocatoria", "state": "ready", "assigned_id": ""}],
+        ])
+        c.pedir.side_effect = [{"user_id": "4"}, None, None]
+        c.completar(1003, "Publicar convocatoria", {"fecha_cierre_input": "2026-11-19T14:00:00.000-03:00"}, esperar_nueva=True)
+        calls = c.pedir.call_args_list
+        self.assertEqual(calls[1].args[:3], ("/API/bpm/humanTask/88", "PUT", {"assigned_id": 4}))
+        self.assertEqual(calls[2].args[:3], ("/API/bpm/userTask/88/execution", "POST", {"fecha_cierre_input": "2026-11-19T14:00:00.000-03:00"}))
+
     def test_no_reintenta_ejecucion_ni_avanza_tras_fallo(self):
         municipio = Mock()
         coordinador = Mock()

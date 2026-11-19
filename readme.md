@@ -36,6 +36,7 @@ Para tener autocompletado y que ande bien el linter de python, con la extensión
 
 - `flask db upgrade`: aplica migraciones pendientes sin borrar datos.
 - `flask seed-db`: crea los usuarios iniciales que todavía no existen.
+- `flask seed-bonita [--cantidad N]`: genera hasta 4 casos reales en Bonita BPM (camino feliz, consorcio, reapertura y continuar parcial) y los lleva hasta `Fin`. Requiere Bonita y la API externa corriendo con `seed_certificaciones_demo`.
 - `flask reset-db`: elimina y recrea todas las tablas; usar sólo cuando se quiera reiniciar la base de datos de forma explícita.
 
 Todos estos comandos pueden ser lanzados desde dentro del contendor desde la opción Exec en Docker Desktop que abre una consola, sino, por medio de la consola con el comando:

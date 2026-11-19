@@ -1,8 +1,8 @@
-from datetime import datetime
 from src.core.database import db
 from src.core.models.actividad import ActividadONG
 from src.core.models.lote_necesidades import LoteNecesidades
 from src.core.enums.estado_actividad_enum import EstadoActividadEnum
+from src.core.timezone import ahora_ar
 
 def listar_actividades(ong_id: int, estado: EstadoActividadEnum = None):
     """Devuelve las actividades de la ONG, opcionalmente filtradas por estado."""
@@ -59,7 +59,7 @@ def finalizar_actividad(actividad_id: int, ong_id: int, informe_cierre: str, rec
         return None
 
     actividad.estado = EstadoActividadEnum.FINALIZADA
-    actividad.fecha_finalizacion = datetime.utcnow()
+    actividad.fecha_finalizacion = ahora_ar()
     actividad.informe_cierre = informe_cierre.strip()
     if recursos_utilizados:
         actividad.recursos_utilizados = {'descripcion': recursos_utilizados.strip()}
@@ -84,5 +84,13 @@ def finalizar_actividad(actividad_id: int, ong_id: int, informe_cierre: str, rec
                     logger.info("Notificado cierre total de ONG %s para caso Bonita %s", ong_id, emergencia.bonita_case_id)
                 except BonitaError as err:
                     logger.warning("No se pudo notificar a Bonita el fin de actividades de la ONG %s: %s", ong_id, err)
+
+            pendientes_totales = ActividadONG.query.filter(
+                ActividadONG.lote_referencia.in_(lote_ids),
+                ActividadONG.estado != EstadoActividadEnum.FINALIZADA,
+            ).count()
+            if pendientes_totales == 0 and emergencia.bonita_case_id:
+                emergencia.bonita_estado = "finalizada"
+                db.session.commit()
 
     return actividad

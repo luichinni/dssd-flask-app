@@ -27,9 +27,17 @@ def crear_emergencia(tipo_desastre: str, nivel_gravedad: int, zona_afectada: str
     # Conservar la emergencia permite investigar resultados inciertos sin
     # crear otra emergencia/caso automáticamente.
     try:
-        nueva_emergencia.bonita_case_id = iniciar_proceso(
+        case_id = iniciar_proceso(
             {"id_emergencia_init": nueva_emergencia.id}
         )
+        obsoleta = Emergencia.query.filter(
+            Emergencia.bonita_case_id == case_id,
+            Emergencia.id != nueva_emergencia.id,
+        ).first()
+        if obsoleta is not None:
+            obsoleta.bonita_case_id = None
+            db.session.flush()
+        nueva_emergencia.bonita_case_id = case_id
         # Avanzar la primer tarea donde se reciben los datos de la emergencia
         _ClienteBonita().completar(
             nueva_emergencia.bonita_case_id,

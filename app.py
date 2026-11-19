@@ -1,4 +1,5 @@
 import os
+import click
 from dotenv import load_dotenv
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -76,6 +77,23 @@ def create_app(env="development", static_folder="./static"):
     def seed_db():
         """Carga los datos iniciales sin eliminar los existentes."""
         seed(app)
+
+    @app.cli.command(name="seed-bonita")
+    @click.option("--cantidad", default=4, show_default=True, type=int, help="Cantidad de casos BPM a generar.")
+    def seed_bonita(cantidad):
+        """Genera casos reales completos en Bonita BPM hasta su archivo final."""
+        from src.core.services.bonita import BonitaError
+        from src.core.services.seed_bonita import ejecutar_seed_bonita
+
+        try:
+            resultado = ejecutar_seed_bonita(limite=cantidad)
+        except BonitaError as exc:
+            click.echo(f"[!] No se pudo completar seed-bonita: {exc}", err=True)
+            raise SystemExit(1)
+        click.echo(
+            f"seed-bonita finalizado: {len(resultado['creados'])} creado(s), "
+            f"{len(resultado['omitidos'])} omitido(s)."
+        )
 
     if env != "testing":
         from src.core.services.bonita import iniciar_vigilante_reintentos

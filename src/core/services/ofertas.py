@@ -1,7 +1,7 @@
 from src.core.models import Oferta
 from src.core.enums import EstadoOfertaEnum
 from src.core.database import db
-from datetime import datetime, timezone
+from src.core.timezone import ahora_ar
 
 from src.core.database import db
 from src.core.models.oferta import Oferta
@@ -454,15 +454,15 @@ def crear_oferta(convocatoria_id, recursos, ong_id, usuario_id, colaboradoras_id
             convocatoria_id=convocatoria.id,
             creada_por_ong_id=ong_id,
             version_actual=1,
-            fecha_ultima_modificacion=datetime.utcnow(),
-            fecha_creacion=datetime.utcnow(),
+            fecha_ultima_modificacion=ahora_ar(),
+            fecha_creacion=ahora_ar(),
         )
         db.session.add(oferta)
         db.session.flush()
         version = VersionOferta(
             id_oferta=oferta.id_oferta,
             numero_version=1,
-            fecha_version=datetime.utcnow(),
+            fecha_version=ahora_ar(),
             usuario_modificacion=usuario_id,
             estado_version=EstadoOfertaEnum.PENDIENTE.value,
         )
@@ -554,7 +554,7 @@ def modificar_oferta(id_oferta, recursos, ong_id, usuario_id, colaboradoras_ids=
         nueva_version = VersionOferta(
             id_oferta=oferta.id_oferta,
             numero_version=nuevo_num_version,
-            fecha_version=datetime.utcnow(),
+            fecha_version=ahora_ar(),
             usuario_modificacion=usuario_id,
             estado_version=EstadoOfertaEnum.PENDIENTE.value
         )
@@ -583,7 +583,7 @@ def modificar_oferta(id_oferta, recursos, ong_id, usuario_id, colaboradoras_ids=
         for colaboradora_id in colaboradoras_nuevas:
             _crear_participacion(oferta, colaboradora_id, 'Pendiente', notificar=True)
         oferta.version_actual = nuevo_num_version
-        oferta.fecha_ultima_modificacion = datetime.utcnow()
+        oferta.fecha_ultima_modificacion = ahora_ar()
         oferta.es_conjunta = OfertaParticipante.query.filter_by(oferta_id=oferta.id).count() > 1
         db.session.flush()
 
