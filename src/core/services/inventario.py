@@ -4,6 +4,7 @@ from src.core.models.recurso_catalogo import RecursoCatalogo
 from src.core.models.detalle_version_oferta import DetalleVersionOferta
 from src.core.models.version_oferta import VersionOferta
 from src.core.models.oferta import Oferta
+from src.core.models.emergencia import Emergencia
 from src.core.enums import EstadoOfertaEnum
 from sqlalchemy import func
 
@@ -36,10 +37,12 @@ def cantidad_comprometida(ong_id: int, recurso_id: int, excluir_oferta_id: int =
         db.session.query(func.coalesce(func.sum(DetalleVersionOferta.cantidad), 0))
         .join(VersionOferta, VersionOferta.id == DetalleVersionOferta.id_version)
         .join(Oferta, Oferta.id == VersionOferta.id_oferta)
+        .join(Emergencia, Emergencia.id == Oferta.id_emergencia)
         .filter(
             DetalleVersionOferta.id_ong == ong_id,
             DetalleVersionOferta.id_recurso == recurso_id,
             VersionOferta.numero_version == Oferta.version_actual,
+            Emergencia.bonita_estado != "finalizada",
             Oferta.estado.in_([
                 EstadoOfertaEnum.PENDIENTE,
                 EstadoOfertaEnum.ACEPTADA,
