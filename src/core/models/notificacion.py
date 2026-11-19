@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from src.core.database import db
 from src.core.enums import TipoNotificacionEnum
+from src.core.timezone import ahora_ar
 
 class Notificacion(db.Model):
     __tablename__ = 'notificaciones'
@@ -16,7 +17,7 @@ class Notificacion(db.Model):
     )
     referencia_id = db.Column(db.Integer, nullable=True)
     leida = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: ahora_ar(), nullable=False)
 
     usuario = db.relationship('Usuario', backref=db.backref('notificaciones', lazy=True, cascade='all, delete-orphan'))
 

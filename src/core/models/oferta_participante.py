@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from src.core.database import db
+from src.core.timezone import ahora_ar
 
 
 class OfertaParticipante(db.Model):
@@ -13,7 +14,7 @@ class OfertaParticipante(db.Model):
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: ahora_ar(),
     )
 
     oferta = db.relationship('Oferta', back_populates='participaciones')

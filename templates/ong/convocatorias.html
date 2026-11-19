@@ -29,7 +29,7 @@
                             </p>
                         </div>
                         <span class="text-sm text-slate-600">
-                            Cierra {{ convocatoria.fecha_cierre_ofertas.strftime('%d/%m/%Y %H:%M UTC') }}
+                            Cierra {{ convocatoria.fecha_cierre_ofertas | ar_datetime }}
                         </span>
                     </div>
                     <ul class="mt-4 divide-y divide-slate-100">

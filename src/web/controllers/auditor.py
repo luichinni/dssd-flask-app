@@ -20,6 +20,7 @@ from pptx.util import Inches, Pt
 from src.core.enums import RolEnum
 from src.core.services.reportes import obtener_reporte_auditor
 from src.web.decorators.roles_required import roles_required
+from src.core.timezone import ahora_ar
 
 auditor_bp = Blueprint("auditor", __name__, url_prefix="/auditor")
 
@@ -56,7 +57,7 @@ def _graficos_seleccionados(source=None) -> set[str]:
 
 
 def _fecha_tag() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+    return ahora_ar().strftime("%Y%m%d_%H%M")
 
 
 @auditor_bp.get("/reportes")
@@ -326,7 +327,7 @@ def export_pptx():
     p_sub.space_before = Pt(12)
 
     p1 = tf.add_paragraph()
-    p1.text = f"Generado: {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M UTC')}  |  Usuario: {current_user.nombre}"
+    p1.text = f"Generado: {ahora_ar().strftime('%d/%m/%Y %H:%M UTC')}  |  Usuario: {current_user.nombre}"
     p1.alignment = PP_ALIGN.CENTER
     p1.font.size = Pt(14)
     p1.font.color.rgb = RGBColor(71, 85, 105)

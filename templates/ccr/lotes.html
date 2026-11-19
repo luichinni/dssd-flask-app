@@ -56,8 +56,8 @@
                                     {% endif %}
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-3 text-xs text-slate-600">
-                                    <div>Inicio: {{ lote.fecha_inicio_ofertas.strftime('%d/%m/%Y %H:%M UTC') if lote.fecha_inicio_ofertas else 'Sin publicar' }}</div>
-                                    <div>Cierre: {{ lote.fecha_cierre_ofertas.strftime('%d/%m/%Y %H:%M UTC') if lote.fecha_cierre_ofertas else 'Sin definir' }}</div>
+                                    <div>Inicio: {{ lote.fecha_inicio_ofertas | ar_datetime if lote.fecha_inicio_ofertas else 'Sin publicar' }}</div>
+                                    <div>Cierre: {{ lote.fecha_cierre_ofertas | ar_datetime if lote.fecha_cierre_ofertas else 'Sin definir' }}</div>
                                 </td>
                                 <td class="px-4 py-3">
                                     {% if estado == 'vencido' %}
@@ -67,7 +67,7 @@
                                         </a>
                                     {% elif estado == 'fallido' %}
                                         <form method="post" action="{{ url_for('ccr.reintentar', lote_id=lote.id) }}" class="min-w-56 space-y-2">
-                                            <label class="block text-xs font-medium text-slate-700" for="cierre-{{ lote.id }}">Nuevo cierre (UTC)</label>
+                                            <label class="block text-xs font-medium text-slate-700" for="cierre-{{ lote.id }}">Nuevo cierre (Hora Argentina)</label>
                                             <input id="cierre-{{ lote.id }}" name="fecha_cierre_ofertas" type="datetime-local" required value="{{ reintento_cierres[lote.id] }}"
                                                    class="w-full rounded border border-slate-300 px-2 py-1 text-xs">
                                             {% if not lote.detalles %}
@@ -192,7 +192,7 @@
             </div>
 
             <div>
-                <label for="fecha_cierre_ofertas" class="block text-sm font-medium text-slate-700">Cierre de ofertas (UTC)</label>
+                <label for="fecha_cierre_ofertas" class="block text-sm font-medium text-slate-700">Cierre de ofertas (Hora Argentina)</label>
                 <input id="fecha_cierre_ofertas" name="fecha_cierre_ofertas" type="datetime-local" required value="{{ default_cierre }}"
                        class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
             </div>

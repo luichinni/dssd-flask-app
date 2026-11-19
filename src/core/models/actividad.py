@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from src.core.database import db
 from src.core.enums import EstadoActividadEnum
+from src.core.timezone import ahora_ar
 
 class ActividadONG(db.Model):
     __tablename__ = 'actividades_ong'
@@ -18,11 +19,11 @@ class ActividadONG(db.Model):
         nullable=False,
         default=EstadoActividadEnum.EN_EJECUCION,
     )
-    fecha_inicio = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    fecha_inicio = db.Column(db.DateTime(timezone=True), default=lambda: ahora_ar(), nullable=False)
     fecha_finalizacion = db.Column(db.DateTime(timezone=True), nullable=True)
     informe_cierre = db.Column(db.Text, nullable=True)
     recursos_utilizados = db.Column(JSONB, nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: ahora_ar(), nullable=False)
 
     ong = db.relationship('ONG', back_populates='actividades')
     lote = db.relationship('LoteNecesidades', back_populates='actividades')

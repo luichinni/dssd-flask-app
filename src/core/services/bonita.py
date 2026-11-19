@@ -253,11 +253,12 @@ def iniciar_proceso(datos_contrato=None, proceso_id=None):
 
 
 def _iso_datetime(fecha: datetime, nombre: str) -> str:
-    """Convierte un datetime con timezone al formato que espera un contrato
-    DATE-TIME (TIME ZONE) de Bonita (ISO 8601, milisegundos, con offset)."""
+    """Convierte un datetime al formato que espera un contrato
+    DATE-TIME (TIME ZONE) de Bonita (ISO 8601, milisegundos, en hora de Argentina)."""
+    from src.core.timezone import a_argentina
     if fecha.tzinfo is None:
-        raise BonitaError(f"{nombre} debe tener timezone (usa _utc() antes de llamar).")
-    return fecha.isoformat(timespec="milliseconds")
+        raise BonitaError(f"{nombre} debe tener timezone (usa a_argentina() antes de llamar).")
+    return a_argentina(fecha).isoformat(timespec="milliseconds")
 
 
 def completar_publicacion_lote(case_id, emergencia_id, fecha_cierre_ofertas):

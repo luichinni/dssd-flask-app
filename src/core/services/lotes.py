@@ -18,24 +18,12 @@ from src.core.models.user import Usuario
 from src.core.models.version_oferta import VersionOferta
 from src.core.services.notificaciones import crear_notificacion
 from src.core.services.bonita import BonitaError, completar_publicacion_lote
-from zoneinfo import ZoneInfo
+from src.core.timezone import ARGENTINA_TZ, ahora_ar
 
 logger = logging.getLogger(__name__)
 
-TZ_LOCAL = ZoneInfo("America/Argentina/Buenos_Aires")
-
 def _utc(fecha: datetime) -> datetime:
-    if fecha.tzinfo is None:
-        # 1. Le decimos que la hora escrita en el formulario es de Argentina
-        fecha = fecha.replace(tzinfo=TZ_LOCAL)
-    # 2. Ahora sí la convertimos al instante UTC equivalente (+3 horas reales)
-    return fecha.astimezone(timezone.utc)
-"""""
-def _utc(fecha: datetime) -> datetime:
-    if fecha.tzinfo is None:
-        return fecha.replace(tzinfo=timezone.utc)
-    return fecha.astimezone(timezone.utc)
-"""""
+    return a_argentina(fecha)
 
 def estado_lote(lote: LoteNecesidades, ahora: datetime = None) -> str:
     """Deriva el estado operativo usando fechas y detalles ya persistidos."""
@@ -49,7 +37,7 @@ def estado_lote(lote: LoteNecesidades, ahora: datetime = None) -> str:
     if cierre <= inicio:
         return 'fallido'
 
-    ahora = _utc(ahora or datetime.now(timezone.utc))
+    ahora = _utc(ahora or ahora_ar())
     if inicio > ahora:
         return 'programado'
     if cierre <= ahora:
@@ -204,7 +192,7 @@ def _validar_decision_pendiente(lote_id: int):
 
 def reabrir_convocatoria(lote_id: int, fecha_cierre_ofertas: datetime) -> LoteNecesidades:
     lote, _, _ = _validar_decision_pendiente(lote_id)
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_ar()
     fecha_cierre_ofertas = _utc(fecha_cierre_ofertas)
     if fecha_cierre_ofertas <= ahora:
         raise ValueError('La fecha de cierre debe ser posterior a la reapertura.')
@@ -244,7 +232,7 @@ def reformular_lote(lote_id: int, detalles: list[dict], fecha_cierre_ofertas: da
             raise ValueError('Las cantidades deben cumplir 1 <= min_r <= cantidad necesaria.')
         detalles_validados.append((recurso, cantidad_necesaria, min_r))
 
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_ar()
     fecha_cierre_ofertas = _utc(fecha_cierre_ofertas)
     if fecha_cierre_ofertas <= ahora:
         raise ValueError('La fecha de cierre debe ser posterior a la reformulación.')
@@ -299,7 +287,7 @@ def continuar_con_ofertas_disponibles(lote_id: int) -> int:
 
 def emergencia_activa(emergencia: Emergencia, ahora: datetime = None) -> bool:
     """Una emergencia permanece activa mientras no se hayan cerrado todos sus lotes."""
-    ahora = ahora or datetime.now(timezone.utc)
+    ahora = ahora or ahora_ar()
     if not emergencia.lotes:
         return True
 
@@ -323,7 +311,7 @@ def listar_emergencias():
 
 def listar_emergencias_activas():
     emergencias = listar_emergencias()
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_ar()
     return [emergencia for emergencia in emergencias if emergencia_activa(emergencia, ahora)]
 
 
@@ -352,13 +340,13 @@ def publicar_lote(emergencia_id: int, detalles: list[dict],
             raise ValueError('Las cantidades deben cumplir 1 <= min_r <= cantidad necesaria.')
         detalles_validados.append((recurso, cantidad_necesaria, min_r))
     """""
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_ar()
     if fecha_cierre_ofertas.tzinfo is None:
-        fecha_cierre_ofertas = fecha_cierre_ofertas.replace(tzinfo=timezone.utc)
+        fecha_cierre_ofertas = fecha_cierre_ofertas.replace(tzinfo=ARGENTINA_TZ)
     if fecha_cierre_ofertas <= ahora:
         raise ValueError('La fecha de cierre debe ser posterior a la publicación.')
     """""
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_ar()
     # Convertimos la fecha ingresada localmente a su instante UTC real
     fecha_cierre_ofertas = _utc(fecha_cierre_ofertas)
     
@@ -411,7 +399,7 @@ def reintentar_lote(lote_id: int, fecha_cierre_ofertas: datetime,
     if estado != 'fallido':
         raise ValueError('Solo se pueden reintentar lotes fallidos; los vencidos requieren una decisión CCR.')
 
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_ar()
     fecha_cierre_ofertas = _utc(fecha_cierre_ofertas)
     if fecha_cierre_ofertas <= ahora:
         raise ValueError('La fecha de cierre debe ser posterior a la reapertura.')

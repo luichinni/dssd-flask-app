@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from src.core.database import db
+from src.core.timezone import ahora_ar
 
 class InventarioONG(db.Model):
     __tablename__ = 'inventario_ong'
@@ -10,8 +11,8 @@ class InventarioONG(db.Model):
     id_recurso = db.Column(db.Integer, db.ForeignKey('recursos_catalogo.id'), nullable=False, index=True)
     cantidad_total = db.Column(db.Integer, nullable=False, default=0)
     cantidad_disponible = db.Column(db.Integer, nullable=False, default=0)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: ahora_ar(), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: ahora_ar(), onupdate=lambda: ahora_ar(), nullable=False)
 
     ong = db.relationship('ONG', back_populates='inventarios')
     recurso = db.relationship('RecursoCatalogo', back_populates='inventarios')

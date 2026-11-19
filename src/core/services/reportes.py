@@ -28,6 +28,7 @@ from src.core.models import (
     VersionOferta,
 )
 from src.core.services.bonita import BonitaError, _ClienteBonita
+from src.core.timezone import ARGENTINA_TZ
 
 ORDEN_ETAPAS_BONITA = [
     "Registrar emergencia",
@@ -52,7 +53,7 @@ def _parse_fecha(valor: str | None, fin_dia: bool = False) -> datetime | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=ARGENTINA_TZ)
     if fin_dia and len(valor.strip()) == 10:
         dt = dt + timedelta(days=1) - timedelta(microseconds=1)
     return dt
@@ -69,7 +70,7 @@ def _parse_bonita_dt(valor: str | None) -> datetime | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=ARGENTINA_TZ)
     return dt
 
 

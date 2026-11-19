@@ -26,6 +26,7 @@ from src.web.decorators.roles_required import roles_required
 from src.core.enums import AccionPostOfertaEnum
 from src.core.services.bonita import BonitaError, completar_decision_post_convocatoria
 from src.core.services.lotes import _utc
+from src.core.timezone import ahora_ar
 
 ccr_bp = Blueprint('ccr', __name__, url_prefix='/ccr')
 
@@ -60,7 +61,7 @@ def lotes():
     publicaciones = listar_lotes()
     estados = {lote.id: estado_lote(lote) for lote in publicaciones}
     reintento_cierres = {
-        lote.id: (datetime.now(timezone.utc) + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M')
+        lote.id: (ahora_ar() + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M')
         for lote in publicaciones
     }
 
@@ -97,7 +98,7 @@ def lotes():
                 flash(f'Lote #{lote.id} guardado y publicado en la app, pero el avance en Bonita no quedó confirmado. Revisá el caso y los logs antes de volver a publicarlo.', 'error')
             return redirect(url_for('ccr.lotes'))
 
-    default_cierre = (datetime.now(timezone.utc) + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M')
+    default_cierre = (ahora_ar() + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M')
     return render_template(
         'ccr/lotes.html',
         emergencias=emergencias,
@@ -139,7 +140,7 @@ def evaluar_convocatoria(lote_id: int):
         evaluacion=evaluacion,
         requiere_decision=lote_requiere_decision(lote, cantidades),
         validacion_en_curso=(lote.bonita_estado == "validando"),
-        reintento_cierre=(datetime.now(timezone.utc) + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M'),
+        reintento_cierre=(ahora_ar() + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M'),
         recursos=RecursoCatalogo.query.order_by(RecursoCatalogo.nombre.asc()).all(),
     )
 

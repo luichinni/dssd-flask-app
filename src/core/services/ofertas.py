@@ -20,6 +20,7 @@ from src.core.models.actividad import ActividadONG
 from src.core.models.notificacion import Notificacion
 from src.core.enums import EstadoActividadEnum
 from src.core.services import inventario
+from src.core.timezone import ahora_ar
 
 
 def listar_ongs_colaboradoras(ong_id):
@@ -164,7 +165,7 @@ def registrar_ofertas_validadas(emergencia_id: int, payload: dict):
         if isinstance(item, dict) and item.get('id_oferta') is not None
     }
 
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_ar()
     ofertas = Oferta.query.filter_by(id_emergencia=emergencia_id).all()
     for oferta in ofertas:
         estado_actual = oferta.estado.value if hasattr(oferta.estado, 'value') else oferta.estado
@@ -255,7 +256,7 @@ def adjudicar_oferta(oferta_id: int, emergencia_id: int = None):
 
     try:
         oferta.estado = EstadoOfertaEnum.ADJUDICADA
-        oferta.fecha_ultima_modificacion = datetime.now(timezone.utc)
+        oferta.fecha_ultima_modificacion = ahora_ar()
         recursos_por_ong = {}
         for detalle in version_vigente.detalles:
             detalle.cantidad_adjudicada = detalle.cantidad
@@ -280,7 +281,7 @@ def adjudicar_oferta(oferta_id: int, emergencia_id: int = None):
                     descripcion=f'Despliegue de recursos adjudicados para la emergencia #{oferta.id_emergencia}.',
                     lote_referencia=oferta.convocatoria_id,
                     estado=EstadoActividadEnum.EN_EJECUCION,
-                    fecha_inicio=datetime.now(timezone.utc),
+                    fecha_inicio=ahora_ar(),
                     recursos_utilizados={'oferta_id': oferta.id, 'recursos': recursos},
                 ))
 

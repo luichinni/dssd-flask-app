@@ -4,6 +4,7 @@ from sqlalchemy.orm import synonym
 
 from src.core.database import db
 from src.core.enums import TipoDesastreEnum, NivelGravedadEnum
+from src.core.timezone import ahora_ar
 
 class Emergencia(db.Model):
     __tablename__ = 'emergencias'
@@ -15,8 +16,8 @@ class Emergencia(db.Model):
     descripcion = db.Column(db.Text, nullable=True)
     responsable_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False, index=True)
     municipio_id = db.Column(db.Integer, db.ForeignKey('municipios.id'), nullable=False, index=True)
-    fecha_registro = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    fecha_registro = db.Column(db.DateTime(timezone=True), default=lambda: ahora_ar(), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: ahora_ar(), onupdate=lambda: ahora_ar(), nullable=False)
 
     bonita_case_id = db.Column(db.BigInteger, nullable=True, unique=True)
     bonita_estado = db.Column(db.String(20), nullable=False, default="sin_iniciar", server_default="sin_iniciar")

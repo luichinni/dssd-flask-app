@@ -5,6 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from src.core import database
 from src.core.config import config
+from src.core.timezone import formatear_ar
 from src.core.bcrypt_and_session import bcrypt
 from src.web.handlers.error import register_error_handlers
 from src.core import models
@@ -25,6 +26,7 @@ migrate = Migrate()
 
 def create_app(env="development", static_folder="./static"):
     app = Flask(__name__, static_folder=static_folder)
+    app.jinja_env.filters["ar_datetime"] = formatear_ar
 
     app.config.from_object(config[env])
 

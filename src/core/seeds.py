@@ -25,6 +25,7 @@ from src.core.enums import (
     NivelGravedadEnum,
 )
 from src.core.database import db
+from src.core.timezone import ahora_ar
 
 
 def seed(app):
@@ -260,7 +261,7 @@ def seed_ong_data():
                 tipo=n_data['tipo'],
                 referencia_id=n_data['referencia_id'],
                 leida=n_data['leida'],
-                created_at=datetime.now(timezone.utc) - timedelta(days=n_data['dias_atras']),
+                created_at=ahora_ar() - timedelta(days=n_data['dias_atras']),
             )
             db.session.add(notif)
             print(f"  [+] Notificación creada: {n_data['titulo']}")
@@ -272,7 +273,7 @@ def seed_ong_data():
             'descripcion': 'Despliegue de equipo médico para atención de familias evacuadas por desborde del río.',
             'lote_referencia': 'LOTE-104-MED',
             'estado': EstadoActividadEnum.EN_EJECUCION,
-            'fecha_inicio': datetime.now(timezone.utc) - timedelta(hours=18),
+            'fecha_inicio': ahora_ar() - timedelta(hours=18),
             'fecha_finalizacion': None,
             'informe_cierre': None,
             'recursos_utilizados': '5 Paramédicos, 1 Ambulancia 4x4, 1 Carpa Sanitaria',
@@ -282,8 +283,8 @@ def seed_ong_data():
             'descripcion': 'Reparto de raciones calóricas y frazadas en centros comunitarios.',
             'lote_referencia': 'LOTE-098-ALIM',
             'estado': EstadoActividadEnum.FINALIZADA,
-            'fecha_inicio': datetime.now(timezone.utc) - timedelta(days=5),
-            'fecha_finalizacion': datetime.now(timezone.utc) - timedelta(days=3),
+            'fecha_inicio': ahora_ar() - timedelta(days=5),
+            'fecha_finalizacion': ahora_ar() - timedelta(days=3),
             'informe_cierre': 'Se distribuyeron 1200 raciones en 3 centros comunitarios designados. Cobertura al 100% de la población censada sin incidentes de gravedad.',
             'recursos_utilizados': '1200 Raciones de Alimento Seco, 4 Voluntarios',
         },
@@ -403,8 +404,8 @@ def seed_ofertas_data():
     if lote is None:
         lote = LoteNecesidades(
             emergencia=emergencia,
-            fecha_inicio_ofertas=datetime.now(timezone.utc) - timedelta(hours=1),
-            fecha_cierre_ofertas=datetime.now(timezone.utc) + timedelta(days=2),
+            fecha_inicio_ofertas=ahora_ar() - timedelta(hours=1),
+            fecha_cierre_ofertas=ahora_ar() + timedelta(days=2),
         )
         lote.detalles.append(LoteDetalle(
             recurso=recurso,
@@ -540,7 +541,7 @@ def seed_ccr_data():
         emergencias[zona] = emergencia
     db.session.flush()
 
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_ar()
     escenarios_lotes = (
         (emergencias['CCR - Convocatoria publicada'], recurso_publicado, 40, 15,
          ahora - timedelta(hours=1), ahora + timedelta(days=7)),
@@ -849,7 +850,7 @@ def seed_reportes_historico():
         print('  [!] No hay recursos en catálogo. Saltando seed_reportes_historico.')
         return
 
-    ahora = datetime.now(timezone.utc)
+    ahora = ahora_ar()
     escenarios = [
         {
             'zona': '[HIST] Cuenca Arroyo El Gato - La Plata',
