@@ -1,12 +1,16 @@
 """Pruebas del callback de validación externa desde Bonita y registro de ofertas."""
 import unittest
+from datetime import timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from flask import Flask
 
-from src.core.enums import EstadoOfertaEnum
+from src.core.enums import EstadoOfertaEnum, TipoDesastreEnum
+from src.core.services import bonita as bonita_service
+from src.core.services.lotes import reabrir_convocatoria
 from src.core.services.ofertas import registrar_ofertas_validadas
+from src.core.timezone import ahora_ar
 from src.web.controllers.bonita_callbacks import bonita_callbacks_bp
 
 
@@ -84,6 +88,108 @@ class TestValidacionCallback(unittest.TestCase):
         self.assertEqual(ver_invalida.estado_version, EstadoOfertaEnum.RECHAZADA.value)
         self.assertEqual(lote.bonita_estado, "validado")
         mock_db.session.commit.assert_called_once()
+
+    def test_solicitud_validacion_rechaza_api_key_invalida(self):
+        resp = self.client.get("/api/emergencias/1/solicitud-validacion")
+        self.assertEqual(resp.status_code, 401)
+
+    @patch("src.web.controllers.bonita_callbacks.construir_solicitud_validacion")
+    def test_solicitud_validacion_devuelve_payload(self, mock_construir):
+        esperado = {"id_emergencia": 1, "tipo_desastre": "hidrologico", "gravedad": "alto", "ofertas": []}
+        mock_construir.return_value = esperado
+        resp = self.client.get(
+            "/api/emergencias/1/solicitud-validacion",
+            headers={"secret-key-api": "clave_best_api_ever"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json(), esperado)
+        mock_construir.assert_called_once_with(1)
+
+    @patch("src.core.database.db")
+    @patch("src.core.models.lote_necesidades.LoteNecesidades")
+    @patch("src.core.services.ofertas.obtener_version_vigente")
+    @patch("src.core.models.oferta.Oferta")
+    @patch("src.core.models.emergencia.Emergencia")
+    def test_construir_solicitud_validacion_marca_validando(
+        self, mock_emergencia_cls, mock_oferta_cls, mock_ver_vigente, mock_lote_cls, mock_db
+    ):
+        mock_db.session.get.return_value = SimpleNamespace(
+            id=1,
+            tipo_desastre=TipoDesastreEnum.hidrologico,
+            nivel_gravedad=3,
+        )
+        oferta = SimpleNamespace(id=10, es_conjunta=False, creada_por_ong_id=2, participaciones=[])
+        mock_oferta_cls.query.filter.return_value.filter.return_value.all.return_value = [oferta]
+        mock_ver_vigente.return_value = SimpleNamespace(
+            detalles=[SimpleNamespace(id_recurso=7, cantidad=15)]
+        )
+        lote = SimpleNamespace(id=5, bonita_estado="sincronizado")
+        mock_lote_cls.query.filter_by.return_value.all.return_value = [lote]
+
+        payload = bonita_service.construir_solicitud_validacion(1)
+        self.assertEqual(payload["id_emergencia"], 1)
+        self.assertEqual(payload["tipo_desastre"], "hidrologico")
+        self.assertEqual(payload["gravedad"], "alto")
+        self.assertEqual(
+            payload["ofertas"],
+            [{"id_oferta": 10, "es_conjunta": False, "id_ong": 2, "recursos": [{"id_recurso": 7, "cantidad_ofrecida": 15}]}],
+        )
+        self.assertEqual(lote.bonita_estado, "validando")
+        mock_db.session.commit.assert_called_once()
+
+    @patch("src.core.services.lotes._notificar_convocatoria")
+    @patch("src.core.services.lotes.db")
+    @patch("src.core.services.lotes._validar_decision_pendiente")
+    def test_reabrir_resetea_bonita_estado_a_sincronizado(self, mock_validar, mock_db, mock_notif):
+        lote = SimpleNamespace(id=9, fecha_inicio_ofertas=None, fecha_cierre_ofertas=None, bonita_estado="validado")
+        mock_validar.return_value = (lote, {}, [])
+        reabrir_convocatoria(9, ahora_ar() + timedelta(hours=24))
+        self.assertEqual(lote.bonita_estado, "sincronizado")
+        mock_db.session.commit.assert_called_once()
+
+
+class TestVigilanteReintentosBonita(unittest.TestCase):
+    def setUp(self):
+        bonita_service._REINTENTOS_ACTIVIDAD.clear()
+        self.app = Flask(__name__)
+        self.app.config["BONITA_ADMIN_USERNAME"] = "walter.bates"
+        self.app.config["BONITA_ADMIN_PASSWORD"] = "bpm"
+
+    def test_reintenta_actividad_fallida_y_luego_marca_agotada(self):
+        cliente = Mock()
+        cliente.pedir.side_effect = [
+            [{"id": "901", "name": "Validar ofertas", "caseId": "77", "state": "failed"}],
+            None,
+            [{"id": "901", "name": "Validar ofertas", "caseId": "77", "state": "failed"}],
+        ]
+        lote = SimpleNamespace(id=9, bonita_estado="validando")
+
+        with (
+            self.app.app_context(),
+            patch("src.core.services.bonita._ClienteBonita", return_value=cliente),
+            patch("src.core.models.emergencia.Emergencia") as mock_em,
+            patch("src.core.models.lote_necesidades.LoteNecesidades") as mock_lote,
+            patch("src.core.database.db") as mock_db,
+        ):
+            mock_em.query.filter_by.return_value.first.return_value = SimpleNamespace(id=3)
+            mock_lote.query.filter_by.return_value.all.return_value = [lote]
+
+            res1 = bonita_service.reintentar_actividades_fallidas(max_intentos=1)
+            self.assertEqual(res1, {"reintentadas": 1, "agotadas": 0})
+            cliente.pedir.assert_any_call("/API/bpm/activity/901", "PUT", {"state": "replay"}, "reintentar actividad Validar ofertas")
+
+            res2 = bonita_service.reintentar_actividades_fallidas(max_intentos=1)
+            self.assertEqual(res2, {"reintentadas": 0, "agotadas": 1})
+            self.assertEqual(lote.bonita_estado, "fallo_validacion")
+            mock_db.session.commit.assert_called_once()
+
+    def test_no_actua_cuando_no_hay_actividades_fallidas(self):
+        cliente = Mock()
+        cliente.pedir.return_value = []
+        with self.app.app_context(), patch("src.core.services.bonita._ClienteBonita", return_value=cliente):
+            res = bonita_service.reintentar_actividades_fallidas(max_intentos=5)
+        self.assertEqual(res, {"reintentadas": 0, "agotadas": 0})
+        cliente.pedir.assert_called_once_with("/API/bpm/activity?p=0&c=100&f=state%3Dfailed", etapa="consultar actividades fallidas")
 
 
 if __name__ == "__main__":

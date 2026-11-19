@@ -199,6 +199,7 @@ def reabrir_convocatoria(lote_id: int, fecha_cierre_ofertas: datetime) -> LoteNe
 
     lote.fecha_inicio_ofertas = ahora
     lote.fecha_cierre_ofertas = fecha_cierre_ofertas
+    lote.bonita_estado = 'sincronizado'
     try:
         db.session.commit()
     except Exception:
@@ -246,6 +247,7 @@ def reformular_lote(lote_id: int, detalles: list[dict], fecha_cierre_ofertas: da
         ))
     lote.fecha_inicio_ofertas = ahora
     lote.fecha_cierre_ofertas = fecha_cierre_ofertas
+    lote.bonita_estado = 'sincronizado'
     try:
         db.session.commit()
     except Exception:
@@ -420,6 +422,7 @@ def reintentar_lote(lote_id: int, fecha_cierre_ofertas: datetime,
 
     lote.fecha_inicio_ofertas = ahora
     lote.fecha_cierre_ofertas = fecha_cierre_ofertas
+    lote.bonita_estado = 'sincronizado'
     try:
         db.session.commit()
     except Exception:

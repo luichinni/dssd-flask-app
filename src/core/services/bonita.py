@@ -1,6 +1,8 @@
 """Cliente REST para iniciar casos y completar tareas de Bonita."""
 import json
 import logging
+import os
+import threading
 import time
 from http.cookiejar import CookieJar
 from urllib.error import HTTPError, URLError
@@ -317,31 +319,35 @@ def completar_decision_post_convocatoria(case_id, decision: AccionPostOfertaEnum
     cliente.completar(case_id, "Publicar convocatoria", {
         "fecha_cierre_input": fecha_cierre_iso
     })
-def enviar_ofertas_a_validar(emergencia_id: int):
-    """Envía las ofertas de la emergencia a Bonita para su validación por competencias."""
+def construir_solicitud_validacion(emergencia_id: int) -> dict:
+    """Construye el payload de ofertas para validar en el servicio externo y marca lotes en validación."""
     from src.core.database import db
     from src.core.models.emergencia import Emergencia
+    from src.core.models.lote_necesidades import LoteNecesidades
     from src.core.models.oferta import Oferta
     from src.core.enums import EstadoOfertaEnum
-    from src.core.services.lotes import todos_los_lotes_cubiertos
     from src.core.services.ofertas import obtener_version_vigente
 
-    emergencia_id = _id(emergencia_id, "ID de emergencia")
+    try:
+        emergencia_id = _id(emergencia_id, "ID de emergencia")
+    except BonitaError as exc:
+        raise ValueError(str(exc)) from exc
+
     emergencia = db.session.get(Emergencia, emergencia_id)
     if not emergencia:
-        raise BonitaError(f"La emergencia {emergencia_id} no existe.")
-    if not emergencia.bonita_case_id:
-        raise BonitaError(f"La emergencia {emergencia_id} no tiene un caso de Bonita asociado.")
+        raise ValueError(f"La emergencia {emergencia_id} no existe.")
 
-    estado_rechazada = EstadoOfertaEnum.RECHAZADA.value if hasattr(EstadoOfertaEnum.RECHAZADA, 'value') else EstadoOfertaEnum.RECHAZADA
+    estado_rechazada = (
+        EstadoOfertaEnum.RECHAZADA.value
+        if hasattr(EstadoOfertaEnum.RECHAZADA, "value")
+        else EstadoOfertaEnum.RECHAZADA
+    )
     ofertas = (
         Oferta.query
         .filter(Oferta.id_emergencia == emergencia_id)
         .filter(Oferta.estado != estado_rechazada)
         .all()
     )
-
-    cubiertos = todos_los_lotes_cubiertos(emergencia_id)
 
     tipo_desastre = (
         emergencia.tipo_desastre.name.lower()
@@ -366,23 +372,41 @@ def enviar_ofertas_a_validar(emergencia_id: int):
                     "cantidad_ofrecida": d.cantidad,
                 }
                 for d in ver.detalles
-            ]
+            ],
         })
 
-    payload_validacion = {
+    for lote in LoteNecesidades.query.filter_by(emergencia_id=emergencia_id).all():
+        if lote.bonita_estado != "validado":
+            lote.bonita_estado = "validando"
+    db.session.commit()
+
+    return {
         "id_emergencia": emergencia.id,
         "tipo_desastre": tipo_desastre,
         "gravedad": gravedad,
         "ofertas": ofertas_payload,
     }
 
+
+def enviar_ofertas_a_validar(emergencia_id: int):
+    """Envía las ofertas de la emergencia a Bonita para su validación por competencias."""
+    from src.core.database import db
+    from src.core.models.emergencia import Emergencia
     from src.core.models.lote_necesidades import LoteNecesidades
+    from src.core.services.lotes import todos_los_lotes_cubiertos
+
+    emergencia_id = _id(emergencia_id, "ID de emergencia")
+    emergencia = db.session.get(Emergencia, emergencia_id)
+    if not emergencia:
+        raise BonitaError(f"La emergencia {emergencia_id} no existe.")
+    if not emergencia.bonita_case_id:
+        raise BonitaError(f"La emergencia {emergencia_id} no tiene un caso de Bonita asociado.")
+
     lotes_emergencia = LoteNecesidades.query.filter_by(emergencia_id=emergencia_id).all()
     estados_previos = {lote.id: lote.bonita_estado for lote in lotes_emergencia}
-    for lote in lotes_emergencia:
-        if lote.bonita_estado != "validado":
-            lote.bonita_estado = "validando"
-    db.session.commit()
+
+    cubiertos = todos_los_lotes_cubiertos(emergencia_id)
+    payload_validacion = construir_solicitud_validacion(emergencia_id)
 
     cliente = _ClienteBonita("SISTEMA_NACIONAL")
     try:
@@ -470,3 +494,112 @@ def notificar_cierre_ong(case_id: int, ong_id: int):
             "id_ong_input": ong_id,
         }
     )
+
+
+_REINTENTOS_ACTIVIDAD: dict[str, dict] = {}
+_VIGILANTE_INICIADO = False
+_VIGILANTE_LOCK = threading.Lock()
+
+
+def reintentar_actividades_fallidas(max_intentos: int = 5) -> dict:
+    """Consulta actividades en estado failed en Bonita y dispara replay con límite de intentos."""
+    from flask import current_app
+    from src.core.database import db
+    from src.core.models.emergencia import Emergencia
+    from src.core.models.lote_necesidades import LoteNecesidades
+
+    config = current_app.config
+    if not config.get("BONITA_ADMIN_USERNAME") or not config.get("BONITA_ADMIN_PASSWORD"):
+        logger.warning("Vigilante de reintentos Bonita inactivo: faltan BONITA_ADMIN_USERNAME y BONITA_ADMIN_PASSWORD.")
+        return {"reintentadas": 0, "agotadas": 0}
+
+    cliente = _ClienteBonita("ADMIN")
+    fallidas = cliente.pedir("/API/bpm/activity?p=0&c=100&f=state%3Dfailed", etapa="consultar actividades fallidas")
+    if not isinstance(fallidas, list):
+        return {"reintentadas": 0, "agotadas": 0}
+
+    ahora = time.monotonic()
+    reintentadas = 0
+    agotadas = 0
+
+    activas_ids = {str(act.get("id")) for act in fallidas if isinstance(act, dict) and act.get("id")}
+    for act_id in list(_REINTENTOS_ACTIVIDAD):
+        if act_id not in activas_ids:
+            _REINTENTOS_ACTIVIDAD.pop(act_id, None)
+
+    for act in fallidas:
+        if not isinstance(act, dict) or not act.get("id"):
+            continue
+        act_id = str(act["id"])
+        case_id = act.get("caseId")
+        nombre = act.get("name", act_id)
+        estado_reintento = _REINTENTOS_ACTIVIDAD.setdefault(act_id, {"intentos": 0, "proximo": 0.0, "agotado": False})
+        if estado_reintento["agotado"]:
+            continue
+
+        if estado_reintento["intentos"] >= max_intentos:
+            estado_reintento["agotado"] = True
+            agotadas += 1
+            logger.error(
+                "Actividad Bonita %s (%s, caso %s) superó el máximo de %s reintentos; se detiene el replay.",
+                act_id, nombre, case_id, max_intentos,
+            )
+            if case_id:
+                try:
+                    emergencia = Emergencia.query.filter_by(bonita_case_id=int(case_id)).first()
+                    if emergencia:
+                        for lote in LoteNecesidades.query.filter_by(emergencia_id=emergencia.id).all():
+                            if lote.bonita_estado != "validado":
+                                lote.bonita_estado = "fallo_validacion"
+                        db.session.commit()
+                except Exception as exc:
+                    db.session.rollback()
+                    logger.warning("No se pudo marcar fallo_validacion para caso %s: %s", case_id, exc)
+            continue
+
+        if ahora < estado_reintento["proximo"]:
+            continue
+
+        intento = estado_reintento["intentos"] + 1
+        try:
+            cliente.pedir(f"/API/bpm/activity/{act_id}", "PUT", {"state": "replay"}, f"reintentar actividad {nombre}")
+            estado_reintento["intentos"] = intento
+            estado_reintento["proximo"] = ahora + min(300, 15 * (2 ** (intento - 1)))
+            reintentadas += 1
+            logger.warning(
+                "Replay #%s/%s disparado para actividad Bonita %s (%s, caso %s).",
+                intento, max_intentos, act_id, nombre, case_id,
+            )
+        except BonitaError as exc:
+            logger.warning("Falló el replay de la actividad Bonita %s (%s): %s", act_id, nombre, exc)
+
+    return {"reintentadas": reintentadas, "agotadas": agotadas}
+
+
+def iniciar_vigilante_reintentos(app):
+    """Inicia un hilo daemon que reintenta actividades fallidas en Bonita periódicamente."""
+    global _VIGILANTE_INICIADO
+    if app.config.get("TESTING") or not app.config.get("BONITA_RETRY_ENABLED", True):
+        return
+    if app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+        return
+
+    with _VIGILANTE_LOCK:
+        if _VIGILANTE_INICIADO:
+            return
+        _VIGILANTE_INICIADO = True
+
+    intervalo = max(5, int(app.config.get("BONITA_RETRY_INTERVAL", 30)))
+
+    def _bucle():
+        while True:
+            time.sleep(intervalo)
+            try:
+                with app.app_context():
+                    reintentar_actividades_fallidas()
+            except Exception as exc:
+                logger.warning("Error en vigilante de reintentos Bonita: %s", exc)
+
+    hilo = threading.Thread(target=_bucle, name="bonita-retry-watcher", daemon=True)
+    hilo.start()
+    logger.info("Vigilante de reintentos Bonita iniciado (intervalo %ss).", intervalo)

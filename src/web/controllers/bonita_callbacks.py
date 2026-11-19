@@ -1,8 +1,20 @@
 from flask import Blueprint, jsonify, request, abort, current_app
+from src.core.services.bonita import construir_solicitud_validacion
 from src.core.services.lotes import todos_los_lotes_cubiertos
 from src.core.services.ofertas import registrar_ofertas_validadas
 
 bonita_callbacks_bp = Blueprint('bonita_callbacks', __name__, url_prefix='/api')
+
+
+@bonita_callbacks_bp.route('/emergencias/<int:id_emergencia>/solicitud-validacion', methods=['GET'])
+def obtener_solicitud_validacion(id_emergencia):
+    if request.headers.get('secret-key-api') != current_app.config.get('BONITA_CALLBACK_API_KEY'):
+        abort(401)
+    try:
+        payload = construir_solicitud_validacion(id_emergencia)
+    except ValueError:
+        abort(404)
+    return jsonify(payload)
 
 
 @bonita_callbacks_bp.route('/emergencias/<int:id_emergencia>/evaluar-cobertura', methods=['GET'])

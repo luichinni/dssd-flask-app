@@ -12,19 +12,16 @@
                 Emergencia #{{ lote.emergencia.id }} · {{ lote.emergencia.zona_afectada }} · {{ lote.emergencia.tipo_desastre.value }}
             </p>
         </div>
-        <div class="flex items-center gap-2">
-            <form method="post" action="{{ url_for('ccr.validar_ofertas_lote', lote_id=lote.id) }}">
-                <button type="submit" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition">
-                    Validar ofertas en Bonita
-                </button>
-            </form>
-        </div>
     </header>
 
     {% if validacion_en_curso %}
         <div id="validacion-banner" class="flex items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
             <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" aria-hidden="true"></span>
             <span><strong>Validando ofertas...</strong> Esperando la respuesta del Sistema Nacional a través de Bonita.</span>
+        </div>
+    {% elif validacion_fallida %}
+        <div id="validacion-error-banner" role="alert" class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+            <strong>Validación fallida, reintentos agotados.</strong> Revisá los logs y el estado del Sistema Nacional en Bonita.
         </div>
     {% endif %}
 
@@ -177,7 +174,7 @@
                 const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
                 if (!res.ok) return;
                 const data = await res.json();
-                if (data.validado) {
+                if (data.validado || data.fallido) {
                     clearInterval(timer);
                     window.location.reload();
                 }

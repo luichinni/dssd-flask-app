@@ -77,6 +77,10 @@ def create_app(env="development", static_folder="./static"):
         """Carga los datos iniciales sin eliminar los existentes."""
         seed(app)
 
+    if env != "testing":
+        from src.core.services.bonita import iniciar_vigilante_reintentos
+        iniciar_vigilante_reintentos(app)
+
     return app
 
 app = create_app()
