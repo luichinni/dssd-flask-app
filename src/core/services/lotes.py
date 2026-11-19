@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 import logging
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -18,7 +18,7 @@ from src.core.models.user import Usuario
 from src.core.models.version_oferta import VersionOferta
 from src.core.services.notificaciones import crear_notificacion
 from src.core.services.bonita import BonitaError, completar_publicacion_lote
-from src.core.timezone import ARGENTINA_TZ, ahora_ar
+from src.core.timezone import ARGENTINA_TZ, a_argentina, ahora_ar
 
 logger = logging.getLogger(__name__)
 
