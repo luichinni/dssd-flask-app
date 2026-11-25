@@ -290,35 +290,27 @@ def completar_decision_post_convocatoria(case_id, decision: AccionPostOfertaEnum
     if not isinstance(decision, AccionPostOfertaEnum):
         raise BonitaError(f"decision debe ser un AccionPostOfertaEnum, recibido: {decision!r}")
 
-    cliente = _ClienteBonita("CCR")
+    if decision != AccionPostOfertaEnum.CONTINUAR:
+        if nueva_fecha_cierre is None:
+            raise BonitaError("Se requiere una nueva fecha de cierre para reabrir o reformular la convocatoria.")
+        fecha_cierre_iso = _iso_datetime(nueva_fecha_cierre, "nueva_fecha_cierre")
 
-    # 1. Completar la decisión en la tarea actual
+    cliente = _ClienteBonita("CCR")
     cliente.completar(case_id, "Evaluar y decidir curso de acción", {
         "accionPostOferta_input": decision.value
-    })
+    }, esperar_nueva=True)
 
-    # 2. Si continúa, no hay más tareas en este tramo
     if decision == AccionPostOfertaEnum.CONTINUAR:
         return
 
-    # 3. Si reabre o reformula, se requiere la nueva fecha de cierre
-    if nueva_fecha_cierre is None:
-        raise BonitaError("Se requiere una nueva fecha de cierre para reabrir o reformular la convocatoria.")
-
-    fecha_cierre_iso = _iso_datetime(nueva_fecha_cierre, "nueva_fecha_cierre")
-
-    # Espera a que el motor de Bonita procese la compuerta y cree la siguiente tarea
-    time.sleep(1.5)
-
     if decision == AccionPostOfertaEnum.REFORMULAR:
-        # Pasa por la tarea intermedia de reformulación
         cliente.completar(case_id, "Reformular lotes de necesidades", esperar_nueva=True)
-        time.sleep(1.0)
 
-    # Ambas ramas terminan en Publicar convocatoria para fijar el temporizador
     cliente.completar(case_id, "Publicar convocatoria", {
         "fecha_cierre_input": fecha_cierre_iso
     }, esperar_nueva=True)
+
+
 def construir_solicitud_validacion(emergencia_id: int) -> dict:
     """Construye el payload de ofertas para validar en el servicio externo y marca lotes en validación."""
     from src.core.database import db
@@ -326,7 +318,7 @@ def construir_solicitud_validacion(emergencia_id: int) -> dict:
     from src.core.models.lote_necesidades import LoteNecesidades
     from src.core.models.oferta import Oferta
     from src.core.enums import EstadoOfertaEnum
-    from src.core.services.ofertas import obtener_version_vigente
+    from src.core.services.ofertas import detalles_para_convocatoria
 
     try:
         emergencia_id = _id(emergencia_id, "ID de emergencia")
@@ -359,11 +351,11 @@ def construir_solicitud_validacion(emergencia_id: int) -> dict:
 
     ofertas_payload = []
     for of in ofertas:
-        ver = obtener_version_vigente(of)
-        if not ver or not ver.detalles:
+        detalles = detalles_para_convocatoria(of)
+        if not detalles:
             continue
         cant_por_recurso: dict[int, int] = {}
-        for d in ver.detalles:
+        for d in detalles:
             cant_por_recurso[d.id_recurso] = cant_por_recurso.get(d.id_recurso, 0) + int(d.cantidad)
         ofertas_payload.append({
             "id_oferta": of.id,
@@ -434,7 +426,7 @@ def enviar_adjudicaciones_a_bonita(emergencia_id: int):
     """Envía a Bonita las ofertas adjudicadas y cuenta la cantidad de ONGs participantes."""
     from src.core.database import db
     from src.core.models.emergencia import Emergencia
-    from src.core.services.ofertas import listar_ofertas_adjudicadas, obtener_version_vigente
+    from src.core.services.ofertas import detalles_para_convocatoria, listar_ofertas_adjudicadas
 
     emergencia_id = _id(emergencia_id, "ID de emergencia")
     emergencia = db.session.get(Emergencia, emergencia_id)
@@ -450,8 +442,7 @@ def enviar_adjudicaciones_a_bonita(emergencia_id: int):
     ongs_unicas = set()
     ofertas_adj_payload = []
     for o in adjudicadas:
-        ver = obtener_version_vigente(o)
-        detalles = ver.detalles if ver else []
+        detalles = detalles_para_convocatoria(o)
         cant_por_recurso: dict[int, int] = {}
         for d in detalles:
             ong_det = getattr(d, "id_ong", None) or o.creada_por_ong_id

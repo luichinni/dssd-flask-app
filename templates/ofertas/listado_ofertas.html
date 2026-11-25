@@ -44,7 +44,7 @@
                         </div>
 
                         <div class="flex shrink-0 items-center gap-2">
-                            {% if oferta.estado == EstadoOfertaEnum.PENDIENTE %}
+                            {% if oferta.editable %}
                                 <a href="{{ url_for('ong.modificar_oferta', id_oferta=oferta.id_oferta) }}"
                                    class="inline-flex items-center rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700">
                                     {{ 'Aportar recursos' if oferta.estado_participacion == 'Pendiente' else 'Editar aporte' }}

@@ -1,12 +1,46 @@
 """Pruebas de ejecución de tareas sin conectarse a Bonita."""
 import unittest
 from datetime import datetime, timezone
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
-from src.core.services.bonita import BonitaError, _ClienteBonita, completar_publicacion_lote, iniciar_proceso
+from src.core.enums import AccionPostOfertaEnum
+from src.core.services.bonita import (
+    BonitaError,
+    _ClienteBonita,
+    completar_decision_post_convocatoria,
+    completar_publicacion_lote,
+    iniciar_proceso,
+)
 
 
 class TareasBonitaTests(unittest.TestCase):
+    @patch("src.core.services.bonita._ClienteBonita")
+    def test_decisiones_usan_las_tareas_de_la_ronda_actual(self, cliente_cls):
+        cliente = cliente_cls.return_value
+        cierre = datetime(2026, 11, 25, 18, 0, tzinfo=timezone.utc)
+        for decision in AccionPostOfertaEnum:
+            with self.subTest(decision=decision):
+                cliente.reset_mock()
+                completar_decision_post_convocatoria(77, decision, cierre)
+                esperadas = [call(
+                    77, "Evaluar y decidir curso de acción",
+                    {"accionPostOferta_input": decision.value}, esperar_nueva=True,
+                )]
+                if decision == AccionPostOfertaEnum.REFORMULAR:
+                    esperadas.append(call(77, "Reformular lotes de necesidades", esperar_nueva=True))
+                if decision != AccionPostOfertaEnum.CONTINUAR:
+                    esperadas.append(call(
+                        77, "Publicar convocatoria",
+                        {"fecha_cierre_input": "2026-11-25T15:00:00.000-03:00"}, esperar_nueva=True,
+                    ))
+                self.assertEqual(cliente.completar.call_args_list, esperadas)
+
+    @patch("src.core.services.bonita._ClienteBonita")
+    def test_reapertura_sin_fecha_no_consume_tarea(self, cliente_cls):
+        with self.assertRaises(BonitaError):
+            completar_decision_post_convocatoria(77, AccionPostOfertaEnum.REABRIR)
+        cliente_cls.assert_not_called()
+
     def cliente(self):
         cliente = object.__new__(_ClienteBonita)
         cliente.timeout = 0.01

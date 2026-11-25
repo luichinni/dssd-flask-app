@@ -2,11 +2,11 @@ from datetime import datetime
 import logging
 
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload, selectinload
 
 from src.core.database import db
-from src.core.enums import EstadoOfertaEnum, RolEnum, TipoNotificacionEnum
+from src.core.enums import AccionPostOfertaEnum, EstadoOfertaEnum, RolEnum, TipoNotificacionEnum
 from src.core.models.detalle_version_oferta import DetalleVersionOferta
 from src.core.models.emergencia import Emergencia
 from src.core.models.lote_detalle import LoteDetalle
@@ -17,7 +17,11 @@ from src.core.models.recurso_catalogo import RecursoCatalogo
 from src.core.models.user import Usuario
 from src.core.models.version_oferta import VersionOferta
 from src.core.services.notificaciones import crear_notificacion
-from src.core.services.bonita import BonitaError, completar_publicacion_lote
+from src.core.services.bonita import (
+    BonitaError,
+    completar_decision_post_convocatoria,
+    completar_publicacion_lote,
+)
 from src.core.timezone import ARGENTINA_TZ, a_argentina, ahora_ar
 
 logger = logging.getLogger(__name__)
@@ -127,7 +131,11 @@ def _notificar_convocatoria(lote: LoteNecesidades, reabierta: bool = False) -> N
             logger.exception('No se pudo notificar la convocatoria CCR %s al usuario %s', lote.id, usuario.id)
 
 
-def cantidades_ofertadas_por_recurso(emergencia_id: int) -> dict[int, int]:
+def cantidades_ofertadas_por_recurso(lote: LoteNecesidades) -> dict[int, int]:
+    convocatoria = Oferta.convocatoria_id == lote.id
+    if len(lote.emergencia.lotes) == 1:
+        convocatoria = or_(convocatoria, Oferta.convocatoria_id.is_(None))
+
     filas = (
         db.session.query(
             DetalleVersionOferta.id_recurso,
@@ -136,7 +144,8 @@ def cantidades_ofertadas_por_recurso(emergencia_id: int) -> dict[int, int]:
         .join(VersionOferta, VersionOferta.id == DetalleVersionOferta.id_version)
         .join(Oferta, Oferta.id == VersionOferta.id_oferta)
         .filter(
-            Oferta.id_emergencia == emergencia_id,
+            Oferta.id_emergencia == lote.emergencia_id,
+            convocatoria,
             Oferta.estado != EstadoOfertaEnum.RECHAZADA,
             VersionOferta.numero_version == Oferta.version_actual,
         )
@@ -173,25 +182,38 @@ def evaluar_minimos_lote(lote: LoteNecesidades, cantidades_ofertadas: dict[int, 
 
 
 def lote_requiere_decision(lote: LoteNecesidades, cantidades_ofertadas: dict[int, int]) -> bool:
-    if estado_lote(lote) != 'vencido':
+    if estado_lote(lote) != 'vencido' or lote.bonita_estado == 'cobertura_parcial':
         return False
     return any(not item['alcanzado'] for item in evaluar_minimos_lote(lote, cantidades_ofertadas))
 
 
 def _validar_decision_pendiente(lote_id: int):
-    lote = db.session.get(LoteNecesidades, lote_id)
+    lote = db.session.get(LoteNecesidades, lote_id, with_for_update=True)
     if lote is None:
         raise ValueError('El lote seleccionado no existe.')
+    if lote.bonita_estado != 'validado':
+        raise ValueError('La convocatoria necesita una validación completa antes de decidir.')
 
-    cantidades = cantidades_ofertadas_por_recurso(lote.emergencia_id)
-    evaluacion = evaluar_minimos_lote(lote, cantidades)
-    if estado_lote(lote) != 'vencido' or not any(not item['alcanzado'] for item in evaluacion):
+    if not lote_requiere_decision(lote, cantidades_ofertadas_por_recurso(lote)):
         raise ValueError('El lote no venció con cantidades mínimas pendientes.')
-    return lote, cantidades, evaluacion
+    return lote
+
+
+def _guardar_decision(lote: LoteNecesidades, decision: AccionPostOfertaEnum, fecha_cierre=None):
+    try:
+        case_id = lote.emergencia.bonita_case_id
+        if not case_id:
+            raise BonitaError(f'La emergencia #{lote.emergencia_id} no tiene un caso de Bonita asociado.')
+        db.session.flush()
+        completar_decision_post_convocatoria(case_id, decision, fecha_cierre)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 def reabrir_convocatoria(lote_id: int, fecha_cierre_ofertas: datetime) -> LoteNecesidades:
-    lote, _, _ = _validar_decision_pendiente(lote_id)
+    lote = _validar_decision_pendiente(lote_id)
     ahora = ahora_ar()
     fecha_cierre_ofertas = _utc(fecha_cierre_ofertas)
     if fecha_cierre_ofertas <= ahora:
@@ -200,17 +222,13 @@ def reabrir_convocatoria(lote_id: int, fecha_cierre_ofertas: datetime) -> LoteNe
     lote.fecha_inicio_ofertas = ahora
     lote.fecha_cierre_ofertas = fecha_cierre_ofertas
     lote.bonita_estado = 'sincronizado'
-    try:
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        raise
+    _guardar_decision(lote, AccionPostOfertaEnum.REABRIR, fecha_cierre_ofertas)
     _notificar_convocatoria(lote, reabierta=True)
     return lote
 
 
 def reformular_lote(lote_id: int, detalles: list[dict], fecha_cierre_ofertas: datetime) -> LoteNecesidades:
-    lote, _, _ = _validar_decision_pendiente(lote_id)
+    lote = _validar_decision_pendiente(lote_id)
     if not detalles:
         raise ValueError('Agrega al menos un recurso al lote reformulado.')
 
@@ -248,43 +266,22 @@ def reformular_lote(lote_id: int, detalles: list[dict], fecha_cierre_ofertas: da
     lote.fecha_inicio_ofertas = ahora
     lote.fecha_cierre_ofertas = fecha_cierre_ofertas
     lote.bonita_estado = 'sincronizado'
-    try:
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        raise
+    _guardar_decision(lote, AccionPostOfertaEnum.REFORMULAR, fecha_cierre_ofertas)
     _notificar_convocatoria(lote, reabierta=True)
     return lote
 
 
-def continuar_con_ofertas_disponibles(lote_id: int) -> int:
-    lote, _, evaluacion = _validar_decision_pendiente(lote_id)
-    recurso_ids = [item['recurso'].id for item in evaluacion if not item['alcanzado']]
-    ofertas = (
-        Oferta.query
-        .join(VersionOferta, (VersionOferta.id_oferta == Oferta.id) &
-              (VersionOferta.numero_version == Oferta.version_actual))
-        .join(DetalleVersionOferta, DetalleVersionOferta.id_version == VersionOferta.id)
-        .filter(
-            Oferta.id_emergencia == lote.emergencia_id,
-            Oferta.estado != EstadoOfertaEnum.RECHAZADA,
-            DetalleVersionOferta.id_recurso.in_(recurso_ids),
-        )
-        .distinct()
-        .all()
-    )
-    if not ofertas:
-        raise ValueError('No hay ofertas disponibles para continuar con el lote.')
+def continuar_con_ofertas_disponibles(lote_id: int) -> None:
+    lote = _validar_decision_pendiente(lote_id)
+    oferta_disponible = Oferta.query.filter_by(
+        id_emergencia=lote.emergencia_id,
+        estado=EstadoOfertaEnum.ACEPTADA,
+    ).first()
+    if oferta_disponible is None:
+        raise ValueError('La emergencia no tiene ofertas validadas para continuar con cobertura parcial.')
 
-    pendientes = [oferta for oferta in ofertas if oferta.estado == EstadoOfertaEnum.PENDIENTE]
-    for oferta in pendientes:
-        oferta.estado = EstadoOfertaEnum.ACEPTADA
-    try:
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        raise
-    return len(pendientes)
+    lote.bonita_estado = 'cobertura_parcial'
+    _guardar_decision(lote, AccionPostOfertaEnum.CONTINUAR)
 
 
 def emergencia_activa(emergencia: Emergencia, ahora: datetime = None) -> bool:
@@ -436,10 +433,9 @@ def todos_los_lotes_cubiertos(emergencia_id: int) -> bool:
     if emergencia is None:
         raise ValueError('La emergencia seleccionada no existe.')
 
-    cantidades = cantidades_ofertadas_por_recurso(emergencia.id)
     for lote in emergencia.lotes:
         if lote.detalles and lote.fecha_inicio_ofertas and lote.fecha_cierre_ofertas:
-            evaluacion = evaluar_minimos_lote(lote, cantidades)
+            evaluacion = evaluar_minimos_lote(lote, cantidades_ofertadas_por_recurso(lote))
             if any(not item['alcanzado'] for item in evaluacion):
                 return False
     return True
