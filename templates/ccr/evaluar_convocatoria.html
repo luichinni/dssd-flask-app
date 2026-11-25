@@ -149,7 +149,9 @@
                 </details>
             </div>
         </section>
-    {% else %}
+    {% elif lote.bonita_estado == 'cobertura_parcial' %}
+        <p class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">El CCR decidió continuar con cobertura parcial.</p>
+    {% elif lote.bonita_estado == 'validado' %}
         <p class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">Las cantidades mínimas requeridas fueron alcanzadas; no hay una decisión pendiente para esta convocatoria.</p>
     {% endif %}
 </div>

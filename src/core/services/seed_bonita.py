@@ -23,7 +23,6 @@ from src.core.services.actividades import finalizar_actividad
 from src.core.services.bonita import (
     BonitaError,
     _ClienteBonita,
-    completar_decision_post_convocatoria,
     enviar_adjudicaciones_a_bonita,
     resolver_process_definition_id,
 )
@@ -310,7 +309,6 @@ def ejecutar_seed_bonita(limite: int = 4, ventana_segundos: int = 12) -> dict:
             _esperar_tarea_lista(cliente_ccr, case_id, "Evaluar y decidir curso de acción")
             nueva_fecha = ahora_ar() + timedelta(seconds=ventana_segundos)
             lote = reabrir_convocatoria(lote.id, nueva_fecha)
-            completar_decision_post_convocatoria(case_id, AccionPostOfertaEnum.REABRIR, nueva_fecha)
             _crear_ofertas_escenario(lote.id, esc["ofertas_reapertura"], ongs_ctx, recursos_map, inventarios)
             lote = _esperar_validacion_lote(lote.id, case_id)
             restante_re = (a_argentina(lote.fecha_cierre_ofertas) - ahora_ar()).total_seconds()
@@ -319,7 +317,6 @@ def ejecutar_seed_bonita(limite: int = 4, ventana_segundos: int = 12) -> dict:
         elif esc["accion"] == AccionPostOfertaEnum.CONTINUAR:
             _esperar_tarea_lista(cliente_ccr, case_id, "Evaluar y decidir curso de acción")
             continuar_con_ofertas_disponibles(lote.id)
-            completar_decision_post_convocatoria(case_id, AccionPostOfertaEnum.CONTINUAR)
 
         _esperar_tarea_lista(cliente_base, case_id, "Seleccionar ofertas")
         aceptadas = listar_ofertas_aceptadas(emergencia.id)

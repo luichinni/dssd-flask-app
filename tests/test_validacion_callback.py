@@ -6,10 +6,11 @@ from unittest.mock import Mock, patch
 
 from flask import Flask
 
-from src.core.enums import EstadoOfertaEnum, TipoDesastreEnum
+from src.core.enums import AccionPostOfertaEnum, EstadoOfertaEnum, TipoDesastreEnum
 from src.core.services import bonita as bonita_service
-from src.core.services.lotes import reabrir_convocatoria
+from src.core.services.lotes import continuar_con_ofertas_disponibles, reabrir_convocatoria, reformular_lote
 from src.core.services.ofertas import (
+    detalles_para_convocatoria,
     registrar_compromiso_externo,
     registrar_liberacion_externa,
     registrar_ofertas_validadas,
@@ -111,11 +112,11 @@ class TestValidacionCallback(unittest.TestCase):
 
     @patch("src.core.database.db")
     @patch("src.core.models.lote_necesidades.LoteNecesidades")
-    @patch("src.core.services.ofertas.obtener_version_vigente")
+    @patch("src.core.services.ofertas.detalles_para_convocatoria")
     @patch("src.core.models.oferta.Oferta")
     @patch("src.core.models.emergencia.Emergencia")
     def test_construir_solicitud_validacion_marca_validando(
-        self, mock_emergencia_cls, mock_oferta_cls, mock_ver_vigente, mock_lote_cls, mock_db
+        self, mock_emergencia_cls, mock_oferta_cls, mock_detalles, mock_lote_cls, mock_db
     ):
         mock_db.session.get.return_value = SimpleNamespace(
             id=1,
@@ -124,9 +125,7 @@ class TestValidacionCallback(unittest.TestCase):
         )
         oferta = SimpleNamespace(id=10, es_conjunta=False, creada_por_ong_id=2, participaciones=[])
         mock_oferta_cls.query.filter.return_value.filter.return_value.all.return_value = [oferta]
-        mock_ver_vigente.return_value = SimpleNamespace(
-            detalles=[SimpleNamespace(id_recurso=7, cantidad=15)]
-        )
+        mock_detalles.return_value = [SimpleNamespace(id_recurso=7, cantidad=15)]
         lote = SimpleNamespace(id=5, bonita_estado="sincronizado")
         mock_lote_cls.query.filter_by.return_value.all.return_value = [lote]
 
@@ -142,14 +141,88 @@ class TestValidacionCallback(unittest.TestCase):
         mock_db.session.commit.assert_called_once()
 
     @patch("src.core.services.lotes._notificar_convocatoria")
+    @patch("src.core.services.lotes.completar_decision_post_convocatoria")
     @patch("src.core.services.lotes.db")
     @patch("src.core.services.lotes._validar_decision_pendiente")
-    def test_reabrir_resetea_bonita_estado_a_sincronizado(self, mock_validar, mock_db, mock_notif):
-        lote = SimpleNamespace(id=9, fecha_inicio_ofertas=None, fecha_cierre_ofertas=None, bonita_estado="validado")
-        mock_validar.return_value = (lote, {}, [])
-        reabrir_convocatoria(9, ahora_ar() + timedelta(hours=24))
+    def test_reabrir_resetea_bonita_estado_a_sincronizado(self, mock_validar, mock_db, mock_bonita, mock_notif):
+        lote = SimpleNamespace(
+            id=9, bonita_estado="validado", emergencia=SimpleNamespace(bonita_case_id=77)
+        )
+        mock_validar.return_value = lote
+        cierre = ahora_ar() + timedelta(hours=24)
+
+        reabrir_convocatoria(9, cierre)
+
         self.assertEqual(lote.bonita_estado, "sincronizado")
+        mock_bonita.assert_called_once_with(77, AccionPostOfertaEnum.REABRIR, cierre)
         mock_db.session.commit.assert_called_once()
+        mock_notif.assert_called_once_with(lote, reabierta=True)
+
+    @patch("src.core.services.lotes._notificar_convocatoria")
+    @patch("src.core.services.lotes.completar_decision_post_convocatoria", side_effect=bonita_service.BonitaError("HTTP 401"))
+    @patch("src.core.services.lotes.db")
+    @patch("src.core.services.lotes._validar_decision_pendiente")
+    def test_fallo_en_bonita_revierte_reapertura(self, mock_validar, mock_db, mock_bonita, mock_notif):
+        mock_validar.return_value = SimpleNamespace(emergencia=SimpleNamespace(bonita_case_id=77))
+
+        with self.assertRaises(bonita_service.BonitaError):
+            reabrir_convocatoria(9, ahora_ar() + timedelta(hours=24))
+
+        mock_db.session.rollback.assert_called_once()
+        mock_db.session.commit.assert_not_called()
+        mock_notif.assert_not_called()
+
+    @patch("src.core.services.lotes._notificar_convocatoria")
+    @patch("src.core.services.lotes.completar_decision_post_convocatoria")
+    @patch("src.core.services.lotes.db")
+    @patch("src.core.services.lotes._validar_decision_pendiente")
+    def test_reformular_reemplaza_recursos_y_conserva_el_historial_de_la_oferta(
+        self, mock_validar, mock_db, mock_bonita, mock_notif,
+    ):
+        recurso = Mock()
+        mock_db.session.get.return_value = recurso
+        lote = SimpleNamespace(detalles=[SimpleNamespace(id_recurso=5)], emergencia=SimpleNamespace(bonita_case_id=77))
+        mock_validar.return_value = lote
+        cierre = ahora_ar() + timedelta(hours=24)
+        anteriores = [SimpleNamespace(id_recurso=5), SimpleNamespace(id_recurso=6)]
+        oferta = SimpleNamespace(
+            version_actual=1,
+            versiones=[SimpleNamespace(numero_version=1, detalles=anteriores)],
+            convocatoria=lote,
+        )
+
+        with patch("src.core.services.lotes.LoteDetalle", return_value=SimpleNamespace(id_recurso=6)) as detalle:
+            reformular_lote(9, [{"recurso_id": 6, "cantidad_necesaria": 4, "min_r": 2}], cierre)
+
+        detalle.assert_called_once_with(recurso=recurso, cantidad_necesaria=4, cantidad_minima=2)
+        self.assertEqual(detalles_para_convocatoria(oferta), [anteriores[1]])
+        self.assertEqual(len(anteriores), 2)
+        mock_bonita.assert_called_once_with(77, AccionPostOfertaEnum.REFORMULAR, cierre)
+        mock_notif.assert_called_once_with(lote, reabierta=True)
+
+    @patch("src.core.services.lotes.completar_decision_post_convocatoria")
+    @patch("src.core.services.lotes.db")
+    @patch("src.core.services.lotes.Oferta")
+    @patch("src.core.services.lotes._validar_decision_pendiente")
+    def test_continuar_requiere_ofertas_validadas(self, mock_validar, mock_oferta, mock_db, mock_bonita):
+        lote = SimpleNamespace(
+            emergencia_id=1, bonita_estado="validado", emergencia=SimpleNamespace(bonita_case_id=77)
+        )
+        mock_validar.return_value = lote
+        consulta = mock_oferta.query.filter_by.return_value
+        consulta.first.return_value = None
+
+        with self.assertRaises(ValueError):
+            continuar_con_ofertas_disponibles(9)
+        mock_bonita.assert_not_called()
+
+        consulta.first.return_value = SimpleNamespace(id=10)
+        continuar_con_ofertas_disponibles(9)
+
+        mock_oferta.query.filter_by.assert_called_with(id_emergencia=1, estado=EstadoOfertaEnum.ACEPTADA)
+        mock_bonita.assert_called_once_with(77, AccionPostOfertaEnum.CONTINUAR, None)
+        mock_db.session.commit.assert_called_once()
+        self.assertEqual(lote.bonita_estado, "cobertura_parcial")
 
     def test_compromiso_registrado_rechaza_api_key_invalida(self):
         resp = self.client.post("/api/emergencias/1/compromiso-registrado", json={})

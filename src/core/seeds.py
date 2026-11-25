@@ -429,6 +429,12 @@ def seed_ofertas_data():
         db.session.add(inventario)
         db.session.flush()
 
+    cantidad_seed = min(10, inventario.cantidad_disponible)
+    if cantidad_seed <= 0:
+        print('  [!] Sin stock disponible. Se conserva la oferta adjudicable existente.')
+        db.session.commit()
+        return
+
     oferta = Oferta.query.filter_by(
         convocatoria_id=lote.id,
         creada_por_ong_id=ong_id,
@@ -476,11 +482,11 @@ def seed_ofertas_data():
         version.detalles.append(DetalleVersionOferta(
             id_ong=ong_id,
             id_recurso=recurso.id,
-            cantidad=min(10, inventario.cantidad_disponible),
+            cantidad=cantidad_seed,
             cantidad_adjudicada=0,
         ))
     else:
-        detalle.cantidad = min(10, inventario.cantidad_disponible)
+        detalle.cantidad = cantidad_seed
         detalle.cantidad_adjudicada = 0
 
     for detalle_extra in list(version.detalles):

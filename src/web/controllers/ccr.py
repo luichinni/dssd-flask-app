@@ -23,9 +23,7 @@ from src.core.services.lotes import (
     reintentar_lote,
 )
 from src.web.decorators.roles_required import roles_required
-from src.core.enums import AccionPostOfertaEnum
-from src.core.services.bonita import BonitaError, completar_decision_post_convocatoria
-from src.core.services.lotes import _utc
+from src.core.services.bonita import BonitaError
 from src.core.timezone import ahora_ar
 
 ccr_bp = Blueprint('ccr', __name__, url_prefix='/ccr')
@@ -124,21 +122,21 @@ def evaluar_convocatoria(lote_id: int):
         flash('La convocatoria todavía no finalizó.', 'info')
         return redirect(url_for('ccr.lotes'))
 
-    cantidades = cantidades_ofertadas_por_recurso(lote.emergencia_id)
+    cantidades = cantidades_ofertadas_por_recurso(lote)
     evaluacion = evaluar_minimos_lote(lote, cantidades)
 
     validacion_fallida = lote.bonita_estado == "fallo_validacion"
     validacion_en_curso = bool(
         lote.emergencia
         and lote.emergencia.bonita_case_id
-        and lote.bonita_estado not in ("validado", "fallo_validacion")
+        and lote.bonita_estado not in ("validado", "fallo_validacion", "cobertura_parcial")
     )
 
     return render_template(
         'ccr/evaluar_convocatoria.html',
         lote=lote,
         evaluacion=evaluacion,
-        requiere_decision=lote_requiere_decision(lote, cantidades),
+        requiere_decision=lote.bonita_estado == "validado" and lote_requiere_decision(lote, cantidades),
         validacion_en_curso=validacion_en_curso,
         validacion_fallida=validacion_fallida,
         reintento_cierre=(ahora_ar() + timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M'),
@@ -150,21 +148,15 @@ def evaluar_convocatoria(lote_id: int):
 @login_required
 @roles_required(RolEnum.CENTRO_COORDINADOR)
 def decidir_lote(lote_id: int):
-    decision_enum = None
-    lote = None
-
     try:
         decision = request.form.get('decision', '').strip().lower()
 
         if decision == 'reabrir':
-            decision_enum = AccionPostOfertaEnum.REABRIR
             fecha_cierre = datetime.fromisoformat(request.form.get('fecha_cierre_ofertas', ''))
-            fecha_cierre = _utc(fecha_cierre)
             lote = reabrir_convocatoria(lote_id, fecha_cierre)
             mensaje = f'Convocatoria del lote #{lote.id} reabierta sin modificar sus recursos.'
 
         elif decision == 'reformular':
-            decision_enum = AccionPostOfertaEnum.REFORMULAR
             recurso_ids = request.form.getlist('recurso_id')
             cantidades = request.form.getlist('cantidad_necesaria')
             minimos = request.form.getlist('min_r')
@@ -179,15 +171,12 @@ def decidir_lote(lote_id: int):
                 for recurso_id, cantidad, min_r in zip(recurso_ids, cantidades, minimos)
             ]
             fecha_cierre = datetime.fromisoformat(request.form.get('fecha_cierre_ofertas', ''))
-            fecha_cierre = _utc(fecha_cierre)
             lote = reformular_lote(lote_id, detalles, fecha_cierre)
             mensaje = f'Lote #{lote.id} reformulado y publicado nuevamente.'
 
         elif decision == 'continuar':
-            decision_enum = AccionPostOfertaEnum.CONTINUAR
-            aceptadas = continuar_con_ofertas_disponibles(lote_id)
-            lote = obtener_lote(lote_id)
-            mensaje = f'Se continúa con las ofertas disponibles; {aceptadas} oferta(s) pendiente(s) aceptada(s).'
+            continuar_con_ofertas_disponibles(lote_id)
+            mensaje = 'Se continúa con las ofertas validadas disponibles.'
 
         else:
             raise ValueError('Selecciona una alternativa válida para el lote.')
@@ -199,24 +188,10 @@ def decidir_lote(lote_id: int):
         flash('No se pudo aplicar la decisión del lote en la base de datos. Inténtalo nuevamente.', 'error')
         return redirect(url_for('ccr.lotes'))
 
-    # Sincronización con Bonita BPM:
-    # Se ejecuta luego de persistir la decisión en la BD local.
-    # Sincronización con Bonita BPM:
-    try:
-        if not lote or not lote.emergencia:
-            raise BonitaError("No se pudo recuperar la emergencia asociada al lote.")
-        
-        case_id = lote.emergencia.bonita_case_id
-        if not case_id:
-            raise BonitaError(f"La emergencia #{lote.emergencia_id} no posee un caso de Bonita asociado.")
-
-        # Pasamos la fecha si fue reapertura o reformulación, o None si fue continuar
-        nueva_fecha = fecha_cierre if decision_enum in (AccionPostOfertaEnum.REABRIR, AccionPostOfertaEnum.REFORMULAR) else None
-        
-        completar_decision_post_convocatoria(case_id, decision_enum, nueva_fecha)
-        flash(f'{mensaje} Se avanzó la tarea en Bonita con la decisión {decision_enum.value}.', 'success')
-    except BonitaError as err:
-        flash(f'{mensaje} Sin embargo, no se pudo confirmar el avance en Bonita: {err}', 'error')
+    except BonitaError as error:
+        flash(f'No se confirmó la decisión en Bonita: {error}', 'error')
+    else:
+        flash(mensaje, 'success')
 
     return redirect(url_for('ccr.lotes'))
 

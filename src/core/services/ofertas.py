@@ -20,6 +20,7 @@ from src.core.models.actividad import ActividadONG
 from src.core.models.notificacion import Notificacion
 from src.core.enums import EstadoActividadEnum
 from src.core.services import inventario
+from src.core.services.lotes import estado_lote
 from src.core.timezone import ahora_ar
 
 
@@ -52,6 +53,8 @@ def _validar_convocatoria_y_duplicado(convocatoria_id, ong_id, oferta_excluir_id
     )
     if convocatoria is None:
         raise ValueError('La convocatoria seleccionada no existe.')
+    if estado_lote(convocatoria) != 'publicado':
+        raise ValueError('La convocatoria está fuera de su ventana de recepción de ofertas.')
 
     query = (
         db.session.query(OfertaParticipante.id)
@@ -291,6 +294,16 @@ def obtener_version_vigente(oferta: Oferta):
     )
 
 
+def detalles_para_convocatoria(oferta: Oferta):
+    version = obtener_version_vigente(oferta)
+    if version is None:
+        return []
+    if oferta.convocatoria is None:
+        return version.detalles
+    recursos_solicitados = {detalle.id_recurso for detalle in oferta.convocatoria.detalles}
+    return [detalle for detalle in version.detalles if detalle.id_recurso in recursos_solicitados]
+
+
 def adjudicar_oferta(oferta_id: int, emergencia_id: int = None):
     """Adjudica una oferta, notifica a sus ONGs y registra un despliegue por ONG."""
     oferta = Oferta.query.get_or_404(oferta_id)
@@ -301,18 +314,15 @@ def adjudicar_oferta(oferta_id: int, emergencia_id: int = None):
     if estado_actual != EstadoOfertaEnum.ACEPTADA.value:
         raise ValueError(f"Solo se pueden adjudicar ofertas en estado Aceptada (estado actual: {oferta.estado})")
 
-    version_vigente = next(
-        (v for v in oferta.versiones if v.numero_version == oferta.version_actual),
-        None,
-    )
-    if version_vigente is None or not version_vigente.detalles:
+    detalles = detalles_para_convocatoria(oferta)
+    if not detalles:
         raise ValueError('La oferta no tiene recursos vigentes para adjudicar.')
 
     try:
         oferta.estado = EstadoOfertaEnum.ADJUDICADA
         oferta.fecha_ultima_modificacion = ahora_ar()
         recursos_por_ong = {}
-        for detalle in version_vigente.detalles:
+        for detalle in detalles:
             detalle.cantidad_adjudicada = detalle.cantidad
             recursos_por_ong.setdefault(detalle.id_ong, []).append({
                 'recurso_id': detalle.id_recurso,
@@ -424,6 +434,11 @@ def listar_ofertas(id_ong):
             "estado_participacion": estado_participacion,
             "es_creadora": oferta.creada_por_ong_id == id_ong,
             "convocatoria_id": oferta.convocatoria_id,
+            "editable": (
+                oferta.estado != EstadoOfertaEnum.ADJUDICADA
+                and oferta.convocatoria is not None
+                and estado_lote(oferta.convocatoria) == 'publicado'
+            ),
             "ongs_participantes": ongs_participantes,
             "recursos": recursos
             }),
@@ -568,20 +583,17 @@ def obtener_oferta_para_modificar(id_oferta, id_ong):
 
 def modificar_oferta(id_oferta, recursos, ong_id, usuario_id, colaboradoras_ids=()):
     oferta, version_actual, participacion = obtener_oferta_para_modificar(id_oferta, ong_id)
-    if oferta.convocatoria_id is not None:
-        _validar_convocatoria_y_duplicado(
-            oferta.convocatoria_id,
-            ong_id,
-            oferta_excluir_id=oferta.id,
-        )
+    if oferta.estado == EstadoOfertaEnum.ADJUDICADA:
+        raise ValueError('La oferta ya fue adjudicada.')
+    convocatoria = _validar_convocatoria_y_duplicado(
+        oferta.convocatoria_id,
+        ong_id,
+        oferta_excluir_id=oferta.id,
+    )
     if not recursos:
         raise ValueError('Debe asignar al menos un recurso de tu inventario.')
 
-    recurso_ids_permitidos = (
-        {detalle.id_recurso for detalle in oferta.convocatoria.detalles}
-        if oferta.convocatoria is not None
-        else set()
-    )
+    recurso_ids_permitidos = {detalle.id_recurso for detalle in convocatoria.detalles}
     recursos_modelos = _validar_recursos(recursos, ong_id, recurso_ids_permitidos, excluir_oferta_id=oferta.id)
     es_creadora = oferta.creada_por_ong_id == ong_id
     if not es_creadora and colaboradoras_ids:
@@ -615,7 +627,7 @@ def modificar_oferta(id_oferta, recursos, ong_id, usuario_id, colaboradoras_ids=
         db.session.add(nueva_version)
         db.session.flush()
         for detalle in version_actual.detalles:
-            if detalle.id_ong != ong_id:
+            if detalle.id_ong != ong_id and detalle.id_recurso in recurso_ids_permitidos:
                 db.session.add(DetalleVersionOferta(
                     id_version=nueva_version.id,
                     id_ong=detalle.id_ong,
@@ -637,6 +649,7 @@ def modificar_oferta(id_oferta, recursos, ong_id, usuario_id, colaboradoras_ids=
         for colaboradora_id in colaboradoras_nuevas:
             _crear_participacion(oferta, colaboradora_id, 'Pendiente', notificar=True)
         oferta.version_actual = nuevo_num_version
+        oferta.estado = EstadoOfertaEnum.PENDIENTE
         oferta.fecha_ultima_modificacion = ahora_ar()
         oferta.es_conjunta = OfertaParticipante.query.filter_by(oferta_id=oferta.id).count() > 1
         db.session.flush()
